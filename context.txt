@@ -1,0 +1,1417 @@
+# Directory Structure:
+t:/dev/sidescroller-engine:
+  - .gitignore
+  - CLAUDE.md
+  - context.txt
+  - Design Spec.txt
+  - promptify.py
+levels:
+  - level5.json
+resources:
+resources\audio:
+  - adventure_theme.mp3
+  - adventure_theme.mp3Zone.Identifier
+  - jump.wav
+resources\graphics:
+  - armadillo_warrior_ss.png
+  - background_2048_512.png
+  - foreground_2048_512.png
+  - platform.png
+  - scientist_ss.png
+src:
+  - camera.py
+  - game.py
+  - level.py
+  - main.py
+  - menu.py
+  - __init__.py
+src\sprites:
+  - enemy.py
+  - platform.py
+  - player.py
+  - __init__.py
+src\sprites\__pycache__:
+  - enemy.cpython-312.pyc
+  - platform.cpython-312.pyc
+  - player.cpython-312.pyc
+  - __init__.cpython-312.pyc
+src\utils:
+  - constants.py
+  - __init__.py
+src\utils\__pycache__:
+  - constants.cpython-312.pyc
+  - __init__.cpython-312.pyc
+src\__pycache__:
+  - camera.cpython-312.pyc
+  - game.cpython-312.pyc
+  - level.cpython-312.pyc
+  - menu.cpython-312.pyc
+
+# Source Files:
+<contents/promptify.py>
+import os
+import argparse
+
+def generate_file_listing(directory, output_file):
+    with open(output_file, 'w', encoding='utf-8') as out_file:
+        # Write the directory structure
+        out_file.write("# Directory Structure:\n")
+        for root, dirs, files in os.walk(directory):
+            relative_path = os.path.relpath(root, directory)
+            if relative_path == ".":
+                relative_path = directory  # Use the passed root directory instead of "."
+            out_file.write(f"{relative_path}:\n")
+            for file in files:
+                out_file.write(f"  - {file}\n")
+        out_file.write("\n# Source Files:\n")
+        
+        # Write the content of each source file
+        for root, dirs, files in os.walk(directory):
+            for file in files:
+                # Only include source files based on extensions
+                if file.endswith(('.py', '.js', '.java', '.cpp', '.c', '.h', '.html', '.css', '.ts', '.go', '.rb', '.sh')):
+                    file_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(file_path, directory)
+                    out_file.write(f"<contents/{relative_path}>\n")
+                    
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as src_file:
+                            out_file.write(src_file.read())
+                    except Exception as e:
+                        out_file.write(f"Error reading file: {e}")
+                    
+                    out_file.write(f"\n</contents/{relative_path}>\n")
+            out_file.write("\n")
+
+if __name__ == "__main__":
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Generate a directory structure and source file listing.")
+    parser.add_argument("directory", help="The directory to scan")
+    args = parser.parse_args()
+
+    # Validate the directory
+    if not os.path.isdir(args.directory):
+        print(f"Error: {args.directory} is not a valid directory.")
+        exit(1)
+
+    # Generate the file listing
+    output_file = "context.txt"
+    generate_file_listing(args.directory, output_file)
+    print(f"Directory structure and source files written to {output_file}")
+
+</contents/promptify.py>
+
+
+
+
+
+<contents/src\camera.py>
+import pygame
+from utils.constants import SCREEN_WIDTH, SCREEN_HEIGHT
+
+class Camera:
+    def __init__(self, level_width, level_height):
+        # Camera dimensions (same as screen)
+        self.width = SCREEN_WIDTH
+        self.height = SCREEN_HEIGHT
+        
+        # Level dimensions in pixels
+        self.level_width = level_width
+        self.level_height = level_height
+        
+        # Camera position
+        self.x = 0
+        self.y = 0
+        
+        # Parallax scroll rates
+        self.fg_scroll_rate = 1.0
+        self.bg_scroll_rate = 0.4
+    
+    def update(self, target_x, target_y):
+        """Update camera position to follow target"""
+        # Center target in camera view
+        target_camera_x = target_x - (self.width // 2)
+        
+        # Restrict camera to level boundaries
+        self.x = max(0, min(target_camera_x, self.level_width - self.width))
+        
+        # Vertical position currently fixed
+        self.y = 0
+    
+    def apply(self, x, y):
+        """Convert world coordinates to screen coordinates"""
+        return x - self.x, y - self.y
+    
+    def apply_rect(self, rect):
+        """Convert world rect to screen rect"""
+        new_rect = pygame.Rect(rect)
+        new_rect.x -= self.x
+        new_rect.y -= self.y
+        return new_rect
+    
+    def apply_parallax_bg(self, bg_x, bg_y, bg_width):
+        """Apply parallax effect to background"""
+        # Calculate background position with parallax scroll rate
+        parallax_x = -(self.x * self.bg_scroll_rate) % bg_width
+        
+        return parallax_x, bg_y
+
+</contents/src\camera.py>
+<contents/src\game.py>
+import pygame
+import json
+import os
+from enum import Enum, auto
+
+from menu import MainMenu
+from level import Level
+from utils.constants import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TITLE
+
+class GameState(Enum):
+    MENU = auto()
+    PLAYING = auto()
+    PAUSED = auto()
+
+class Game:
+    def __init__(self):
+        # Set up the display
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
+        pygame.display.set_caption(TITLE)
+        
+        # Set up the clock
+        self.clock = pygame.time.Clock()
+        
+        # Game state
+        self.state = GameState.MENU
+        self.running = True
+        self.current_level = None
+        
+        # Load levels list
+        self.levels = self._get_available_levels()
+        
+        # Create main menu
+        self.menu = MainMenu(self)
+        
+        # Set up audio
+        self.init_audio()
+        
+    def _get_available_levels(self):
+        """Find all level files in the levels directory"""
+        levels = []
+        levels_dir = os.path.join(os.getcwd(), 'levels')
+        
+        try:
+            for file in os.listdir(levels_dir):
+                if file.endswith('.json'):
+                    level_path = os.path.join(levels_dir, file)
+                    level_name = os.path.splitext(file)[0]
+                    levels.append((level_name, level_path))
+        except Exception as e:
+            print(f"Error loading levels: {e}")
+        
+        return levels
+    
+    def init_audio(self):
+        """Initialize game audio"""
+        try:
+            pygame.mixer.music.load(os.path.join('resources', 'audio', 'adventure_theme.mp3'))
+            pygame.mixer.music.set_volume(0.05)  # Reduced to 10% of original (0.5 -> 0.05)
+        except pygame.error as e:
+            print(f"Warning: Could not load background music: {e}")
+        
+        # Jump sound
+        try:
+            self.jump_sound = pygame.mixer.Sound(os.path.join('resources', 'audio', 'jump.wav'))
+            self.jump_sound.set_volume(0.04)  # Reduced to 10% of original (0.4 -> 0.04)
+        except pygame.error as e:
+            print(f"Warning: Could not load jump sound: {e}")
+            # Create dummy sound object to avoid None checks
+            self.jump_sound = pygame.mixer.Sound(buffer=bytearray(16))
+            self.jump_sound.set_volume(0)
+    
+    def load_level(self, level_path):
+        """Load a level from a JSON file"""
+        try:
+            self.current_level = Level(level_path, self)
+            self.state = GameState.PLAYING
+            # Start music if available
+            try:
+                pygame.mixer.music.play(-1)  # Loop indefinitely
+            except pygame.error:
+                print("Warning: Could not play background music")
+        except Exception as e:
+            print(f"Error loading level: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+        
+        return True
+    
+    def handle_events(self):
+        """Process all game events"""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            
+            # Window resize event
+            elif event.type == pygame.VIDEORESIZE:
+                self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
+                
+            # Handle ESC key to exit game or return to menu
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    if self.state == GameState.PLAYING:
+                        self.state = GameState.MENU
+                    elif self.state == GameState.MENU:
+                        self.running = False
+                        
+            # Pass events to current state handler
+            if self.state == GameState.MENU:
+                self.menu.handle_event(event)
+            elif self.state == GameState.PLAYING and self.current_level:
+                self.current_level.handle_event(event)
+    
+    def update(self):
+        """Update game state"""
+        if self.state == GameState.MENU:
+            self.menu.update()
+        elif self.state == GameState.PLAYING and self.current_level:
+            self.current_level.update()
+    
+    def render(self):
+        """Render the current game state"""
+        # Clear the screen
+        self.screen.fill((0, 0, 0))
+        
+        # Render current state
+        if self.state == GameState.MENU:
+            self.menu.render(self.screen)
+        elif self.state == GameState.PLAYING and self.current_level:
+            self.current_level.render(self.screen)
+        
+        # Flip the display
+        pygame.display.flip()
+    
+    def run(self):
+        """Main game loop"""
+        while self.running:
+            # Process events
+            self.handle_events()
+            
+            # Update game state
+            self.update()
+            
+            # Render
+            self.render()
+            
+            # Control the game speed
+            self.clock.tick(FPS)
+
+</contents/src\game.py>
+<contents/src\level.py>
+import pygame
+import json
+import os
+from camera import Camera
+from sprites.player import Player
+from sprites.platform import Platform, GroundBlock
+from sprites.enemy import Enemy, EnemyType
+from utils.constants import SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_START_X, DEBUG, WHITE, RED, GREEN
+
+class Level:
+    # Class variable to track current instance for asset loading
+    current_instance = None
+    
+    def __init__(self, level_path, game):
+        # Set as current instance
+        Level.current_instance = self
+        
+        self.game = game
+        self.debug = DEBUG
+        
+        # Load level data
+        with open(level_path, 'r') as file:
+            self.level_data = json.load(file)
+        
+        # Extract level dimensions
+        self.cell_size = self.level_data['dimensions']['cell_size']
+        self.level_width_cells = self.level_data['dimensions']['width']
+        self.level_height_cells = self.level_data['dimensions']['height']
+        self.level_width_pixels = self.level_width_cells * self.cell_size
+        self.level_height_pixels = self.level_height_cells * self.cell_size
+        
+        # Create camera
+        self.camera = Camera(self.level_width_pixels, self.level_height_pixels)
+        
+        # Set parallax rates
+        if 'parallax' in self.level_data:
+            self.camera.fg_scroll_rate = self.level_data['parallax']['fg_scroll_rate']
+            self.camera.bg_scroll_rate = self.level_data['parallax']['bg_scroll_rate']
+        
+        # Load assets
+        self.load_assets()
+        
+        # Create sprite groups
+        self.all_sprites = pygame.sprite.Group()
+        self.platforms = pygame.sprite.Group()
+        self.ground_blocks = pygame.sprite.Group()
+        self.enemies = pygame.sprite.Group()
+        
+        # Create level elements
+        self.create_level()
+        
+        # Create debug font
+        self.debug_font = pygame.font.SysFont(None, 24)
+    
+    def load_assets(self):
+        """Load level assets"""
+        # Load background image
+        try:
+            bg_path = self.level_data['assets']['background']
+            if os.path.isabs(bg_path):
+                # Extract filename from absolute path
+                bg_filename = os.path.basename(bg_path)
+                bg_path = os.path.join('resources', 'graphics', bg_filename)
+            
+            print(f"Loading background from: {bg_path}")
+            self.bg_image = pygame.image.load(bg_path).convert_alpha()
+        except (pygame.error, KeyError, FileNotFoundError) as e:
+            print(f"Warning: Could not load background image: {e}")
+            # Create fallback background
+            self.bg_image = pygame.Surface((self.level_width_pixels, self.level_height_pixels))
+            self.bg_image.fill((100, 100, 255))  # Sky blue
+        
+        # Load foreground image
+        try:
+            fg_path = self.level_data['assets']['foreground']
+            if os.path.isabs(fg_path):
+                # Extract filename from absolute path
+                fg_filename = os.path.basename(fg_path)
+                fg_path = os.path.join('resources', 'graphics', fg_filename)
+            
+            print(f"Loading foreground from: {fg_path}")
+            self.fg_image = pygame.image.load(fg_path).convert_alpha()
+        except (pygame.error, KeyError, FileNotFoundError) as e:
+            print(f"Warning: Could not load foreground image: {e}")
+            # Create fallback foreground
+            self.fg_image = pygame.Surface((self.level_width_pixels, self.level_height_pixels))
+            self.fg_image.fill((200, 200, 200, 128))  # Semi-transparent gray
+            
+        # Fix platform image path if present
+        if 'platform_image' in self.level_data['assets']:
+            platform_path = self.level_data['assets']['platform_image']
+            if os.path.isabs(platform_path):
+                # Extract filename from absolute path
+                platform_filename = os.path.basename(platform_path)
+                self.level_data['assets']['platform_image'] = os.path.join('resources', 'graphics', platform_filename)
+                print(f"Updated platform image path to: {self.level_data['assets']['platform_image']}")
+        
+        # Get image dimensions
+        self.bg_width, self.bg_height = self.bg_image.get_size()
+        self.fg_width, self.fg_height = self.fg_image.get_size()
+    
+    def create_level(self):
+        """Create all level elements"""
+        # Create player at the starting position (4th cell from left edge)
+        player_x = PLAYER_START_X * self.cell_size
+        player_y = 0  # Start at the top and fall down
+        self.player = Player(player_x, player_y, self.cell_size)
+        self.all_sprites.add(self.player)
+        
+        # Create platforms
+        for platform_data in self.level_data['platforms']:
+            platform = Platform(
+                platform_data['x'], 
+                platform_data['y'], 
+                platform_data['width'], 
+                platform_data.get('height', 1), 
+                self.cell_size
+            )
+            self.platforms.add(platform)
+            self.all_sprites.add(platform)
+        
+        # Create ground blocks
+        for block_data in self.level_data['ground_blocks']:
+            block = GroundBlock(
+                block_data['x'], 
+                block_data['y'], 
+                block_data['width'], 
+                self.cell_size
+            )
+            self.ground_blocks.add(block)
+            self.all_sprites.add(block)
+        
+        # Create enemies
+        for enemy_data in self.level_data.get('enemies', []):
+            try:
+                enemy_type_str = enemy_data.get('type', 'BASIC').upper()
+                enemy_type = EnemyType[enemy_type_str]
+            except (KeyError, ValueError):
+                enemy_type = EnemyType.BASIC
+                
+            enemy = Enemy(
+                enemy_data['x'], 
+                enemy_data['y'], 
+                enemy_type, 
+                self.cell_size
+            )
+            self.enemies.add(enemy)
+            self.all_sprites.add(enemy)
+    
+    def handle_event(self, event):
+        """Handle level events"""
+        # Pass event to player
+        self.player.handle_event(event)
+        
+        # Toggle debug mode
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_F3:
+            self.debug = not self.debug
+    
+    def update(self):
+        """Update level state"""
+        # Calculate delta time
+        dt = self.game.clock.get_time() / 1000.0  # Convert to seconds
+        
+        # Update player
+        self.player.update(dt, self.platforms, self.ground_blocks)
+        
+        # Update enemies
+        for enemy in self.enemies:
+            enemy.update(dt, self.platforms, self.ground_blocks)
+            
+            # Check for player-enemy collision
+            if self.player.rect.colliderect(enemy.rect):
+                # Player gets hurt or game over logic would go here
+                pass
+        
+        # Update camera to follow player
+        self.camera.update(self.player.rect.centerx, self.player.rect.centery)
+        
+        # DO NOT check for jumps here - this was causing auto-jumping!
+        # Jump handling is now done only in the player's handle_event method
+    
+    def render(self, screen):
+        """Render the level"""
+        # Fill background
+        screen.fill((0, 0, 0))
+        
+        # Calculate background placement with parallax effect
+        bg_x, bg_y = self.camera.apply_parallax_bg(0, 0, self.bg_width)
+        
+        # Draw tiled background
+        tiles_needed = self.level_width_pixels // self.bg_width + 2
+        for i in range(tiles_needed):
+            screen.blit(self.bg_image, (bg_x + i * self.bg_width, bg_y))
+        
+        # Draw tiled foreground
+        fg_x, fg_y = self.camera.apply(0, 0)
+        tiles_needed = self.level_width_pixels // self.fg_width + 2
+        for i in range(tiles_needed):
+            screen.blit(self.fg_image, (fg_x + i * self.fg_width, fg_y))
+        
+        # Draw all sprites (position them relative to camera)
+        for sprite in self.all_sprites:
+            sprite_screen_pos = self.camera.apply_rect(sprite.rect)
+            
+            # In debug mode, show debug versions of ground blocks
+            if self.debug and isinstance(sprite, GroundBlock):
+                screen.blit(sprite.debug_image, sprite_screen_pos)
+            else:
+                screen.blit(sprite.image, sprite_screen_pos)
+        
+        # Draw debug info if enabled
+        if self.debug:
+            self.render_debug_info(screen)
+    
+    def render_debug_info(self, screen):
+        """Render debug information"""
+        # Draw grid
+        for x in range(0, self.level_width_pixels, self.cell_size):
+            screen_x, _ = self.camera.apply(x, 0)
+            pygame.draw.line(screen, (50, 50, 50), (screen_x, 0), (screen_x, SCREEN_HEIGHT))
+        
+        for y in range(0, self.level_height_pixels, self.cell_size):
+            _, screen_y = self.camera.apply(0, y)
+            pygame.draw.line(screen, (50, 50, 50), (0, screen_y), (SCREEN_WIDTH, screen_y))
+        
+        # Draw player position info
+        player_cell_x = self.player.rect.centerx // self.cell_size
+        player_cell_y = self.player.rect.bottom // self.cell_size
+        pos_text = f"Pos: {self.player.rect.centerx}, {self.player.rect.bottom} (Cell: {player_cell_x}, {player_cell_y})"
+        text_surface = self.debug_font.render(pos_text, True, WHITE)
+        screen.blit(text_surface, (10, 10))
+        
+        # Draw player velocity and ground state
+        effective_on_ground = self.player.on_ground or (self.player.ground_buffer > 0 and self.player.velocity_y >= 0)
+        velocity_text = f"Velocity: ({self.player.velocity_x}, {self.player.velocity_y}) Physical Ground: {self.player.on_ground}"
+        text_surface = self.debug_font.render(velocity_text, True, GREEN if self.player.on_ground else RED)
+        screen.blit(text_surface, (10, 40))
+        
+        # Draw ground buffer state
+        buffer_text = f"Ground Buffer: {self.player.ground_buffer}/{self.player.ground_buffer_max} Effective Ground: {effective_on_ground}"
+        text_surface = self.debug_font.render(buffer_text, True, GREEN if effective_on_ground else RED)
+        screen.blit(text_surface, (10, 70))
+        
+        # Draw jump state
+        jump_text = f"Can Jump: {self.player.can_jump}, Jumping: {self.player.jumping}, Released: {self.player.jump_released}"
+        text_surface = self.debug_font.render(jump_text, True, GREEN if self.player.can_jump else RED)
+        screen.blit(text_surface, (10, 100))
+        
+        # Draw camera info
+        camera_text = f"Camera: {self.camera.x}, {self.camera.y}"
+        text_surface = self.debug_font.render(camera_text, True, WHITE)
+        screen.blit(text_surface, (10, 130))
+        
+        # Draw FPS
+        fps = self.game.clock.get_fps()
+        fps_text = f"FPS: {fps:.1f}"
+        text_surface = self.debug_font.render(fps_text, True, WHITE)
+        screen.blit(text_surface, (10, 130))
+        
+        # Draw player collision box
+        player_screen_rect = self.camera.apply_rect(self.player.rect)
+        pygame.draw.rect(screen, (255, 0, 0), player_screen_rect, 2)
+        
+        # Draw player foot collision box for ground detection
+        foot_screen_rect = self.camera.apply_rect(self.player.foot_rect)
+        pygame.draw.rect(screen, (0, 255, 255), foot_screen_rect, 2)  # Cyan color for foot box
+        
+        # Draw ground sensor area
+        ground_sensor = pygame.Rect(self.player.foot_rect)
+        ground_sensor.height = 12
+        ground_sensor.bottom = self.player.rect.bottom + 2
+        ground_sensor_screen_rect = self.camera.apply_rect(ground_sensor)
+        pygame.draw.rect(screen, (255, 255, 0), ground_sensor_screen_rect, 1)  # Yellow for ground sensor
+        
+        # Draw hint for F3 key
+        hint_text = "F3: Toggle Debug Mode"
+        text_surface = self.debug_font.render(hint_text, True, WHITE)
+        screen.blit(text_surface, (SCREEN_WIDTH - text_surface.get_width() - 10, 10))
+
+</contents/src\level.py>
+<contents/src\main.py>
+#!/usr/bin/env python3
+
+import os
+import sys
+import pygame
+from game import Game
+
+def main():
+    # Initialize pygame
+    pygame.init()
+    pygame.mixer.init()
+    
+    # Create game instance and run
+    game = Game()
+    game.run()
+    
+    # Clean exit
+    pygame.quit()
+    sys.exit(0)
+
+if __name__ == "__main__":
+    # Ensure we're running from the right directory
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    main()
+
+</contents/src\main.py>
+<contents/src\menu.py>
+import pygame
+import os
+from utils.constants import (
+    SCREEN_WIDTH, SCREEN_HEIGHT, WHITE, BLACK, BLUE, 
+    MENU_TITLE_SIZE, MENU_OPTION_SIZE, MENU_PADDING
+)
+
+class MainMenu:
+    def __init__(self, game):
+        self.game = game
+        self.selected_option = 0
+        self.options = []
+        self.title_font = pygame.font.SysFont(None, MENU_TITLE_SIZE)
+        self.option_font = pygame.font.SysFont(None, MENU_OPTION_SIZE)
+        
+        # Background image
+        try:
+            self.bg_image = pygame.image.load(os.path.join('resources', 'graphics', 'menu_bg.png'))
+            self.bg_image = pygame.transform.scale(self.bg_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        except:
+            self.bg_image = None
+        
+        # Update level options whenever levels change
+        self.update_options()
+    
+    def update_options(self):
+        # Start with basic options
+        self.options = ["Exit"]
+        
+        # Add level options at the beginning if levels are available
+        if hasattr(self.game, 'levels') and self.game.levels:
+            for level_name, _ in reversed(self.game.levels):  # Reverse to put newest on top
+                self.options.insert(0, f"Play {level_name}")
+        else:
+            # Add a placeholder option if no levels found
+            self.options.insert(0, "No levels found")
+            
+        # Reset selection to first option
+        self.selected_option = 0
+    
+    def handle_event(self, event):
+        if event.type == pygame.KEYDOWN:
+            # Navigate menu
+            if event.key == pygame.K_UP:
+                self.selected_option = (self.selected_option - 1) % len(self.options)
+            elif event.key == pygame.K_DOWN:
+                self.selected_option = (self.selected_option + 1) % len(self.options)
+            # Select option
+            elif event.key == pygame.K_RETURN or event.key == pygame.K_SPACE:
+                self.select_option()
+    
+    def select_option(self):
+        selected = self.options[self.selected_option]
+        
+        # Handle "Exit" option
+        if selected == "Exit":
+            self.game.running = False
+        # Handle level selection
+        elif selected.startswith("Play "):
+            level_name = selected[5:]  # Remove "Play " prefix
+            
+            # Find matching level path
+            for name, path in self.game.levels:
+                if name == level_name:
+                    self.game.load_level(path)
+                    break
+    
+    def update(self):
+        # Check if the levels list has changed
+        if len(self.options) - 1 != len(self.game.levels):  # -1 for Exit option
+            self.update_options()
+    
+    def render(self, screen):
+        # Draw background
+        if self.bg_image:
+            screen.blit(self.bg_image, (0, 0))
+        else:
+            screen.fill(BLACK)
+        
+        # Draw title
+        title_text = self.title_font.render("Parallax Sidescroller", True, WHITE)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 4))
+        screen.blit(title_text, title_rect)
+        
+        # Draw menu options
+        for i, option in enumerate(self.options):
+            # Highlight selected option
+            if i == self.selected_option:
+                color = BLUE
+                text = f"> {option} <"
+            else:
+                color = WHITE
+                text = option
+            
+            option_text = self.option_font.render(text, True, color)
+            option_rect = option_text.get_rect(
+                center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + (i * (MENU_OPTION_SIZE + MENU_PADDING)))
+            )
+            screen.blit(option_text, option_rect)
+
+</contents/src\menu.py>
+<contents/src\__init__.py>
+# Sidescroller Engine Package
+</contents/src\__init__.py>
+
+<contents/src\sprites\enemy.py>
+import pygame
+import os
+from enum import Enum, auto
+
+class EnemyType(Enum):
+    BASIC = auto()
+    FLYING = auto()
+    JUMPING = auto()
+
+class Enemy(pygame.sprite.Sprite):
+    def __init__(self, x, y, enemy_type, cell_size):
+        super().__init__()
+        self.cell_size = cell_size
+        self.enemy_type = enemy_type
+        
+        # Convert from cell to pixel coordinates
+        self.cell_x = x
+        self.cell_y = y
+        pixel_x = x * cell_size
+        pixel_y = y * cell_size
+        
+        # Default values
+        self.speed = 2
+        self.direction = 1  # 1 = right, -1 = left
+        self.patrol_distance = 4 * cell_size  # 4 cells
+        self.start_x = pixel_x
+        
+        # Try to load sprite sheet based on enemy type
+        sprite_sheet_path = os.path.join('resources', 'graphics', f'{enemy_type.name.lower()}_enemy_ss.png')
+        
+        try:
+            sprite_sheet = pygame.image.load(sprite_sheet_path).convert_alpha()
+        except pygame.error:
+            # Fallback sprite
+            sprite_sheet = pygame.Surface((64, 64))
+            sprite_sheet.fill((255, 0, 0))  # Red for missing texture
+        
+        # Calculate frame size
+        sheet_width, sheet_height = sprite_sheet.get_size()
+        self.frame_width = sheet_width // 4
+        self.frame_height = sheet_height // 4
+        
+        # Extract animation frames
+        self.frames = self._create_animation_frames(sprite_sheet)
+        
+        # Animation variables
+        self.current_frame = 0
+        self.animation_speed = 0.15
+        self.animation_time = 0
+        
+        # Rect for collision
+        self.image = self.frames[0]
+        self.rect = self.image.get_rect()
+        self.rect.centerx = pixel_x
+        self.rect.bottom = pixel_y  # Bottom-centered like player
+        
+        # Set behavior based on enemy type
+        if enemy_type == EnemyType.BASIC:
+            # Patrol back and forth
+            self._update = self._update_patrol
+        elif enemy_type == EnemyType.FLYING:
+            # Fly up and down
+            self._update = self._update_flying
+            self.flight_height = 2 * cell_size
+            self.start_y = pixel_y
+            self.flight_direction = 1
+        elif enemy_type == EnemyType.JUMPING:
+            # Jump periodically
+            self._update = self._update_jumping
+            self.jump_timer = 0
+            self.jump_interval = 2.0  # seconds
+            self.jump_strength = -10
+            self.gravity = 0.5
+            self.velocity_y = 0
+            self.on_ground = True
+    
+    def _create_animation_frames(self, sprite_sheet):
+        """Create animation frames from sprite sheet"""
+        frames = []
+        
+        # Use the bottom row (south-facing) frames for enemies
+        row = 2  # South-facing
+        for col in range(4):
+            frame = pygame.Surface((self.frame_width, self.frame_height), pygame.SRCALPHA)
+            frame.blit(sprite_sheet, (0, 0), (
+                col * self.frame_width, 
+                row * self.frame_height, 
+                self.frame_width, 
+                self.frame_height
+            ))
+            frames.append(frame)
+        
+        return frames
+    
+    def update(self, dt, platforms, ground_blocks):
+        """Update enemy based on its type"""
+        # Call the appropriate update method based on enemy type
+        self._update(dt, platforms, ground_blocks)
+        
+        # Update animation
+        self.animation_time += dt
+        if self.animation_time >= self.animation_speed:
+            self.current_frame = (self.current_frame + 1) % 4
+            self.animation_time = 0
+            self.image = self.frames[self.current_frame]
+    
+    def _update_patrol(self, dt, platforms, ground_blocks):
+        """Update logic for patrolling enemies"""
+        # Move horizontally
+        self.rect.x += self.speed * self.direction
+        
+        # Check if we've reached the patrol limit
+        if self.direction > 0 and self.rect.centerx > self.start_x + self.patrol_distance:
+            self.direction = -1
+            # Flip frames horizontally
+            self.frames = [pygame.transform.flip(frame, True, False) for frame in self.frames]
+        elif self.direction < 0 and self.rect.centerx < self.start_x - self.patrol_distance:
+            self.direction = 1
+            # Flip frames back
+            self.frames = [pygame.transform.flip(frame, True, False) for frame in self.frames]
+        
+        # Check for collisions with platforms and ground blocks
+        for platform in platforms:
+            if self.rect.colliderect(platform.rect):
+                # Reverse direction
+                self.direction *= -1
+                # Flip frames
+                self.frames = [pygame.transform.flip(frame, True, False) for frame in self.frames]
+                break
+        
+        for block in ground_blocks:
+            if self.rect.colliderect(block.rect):
+                # Reverse direction
+                self.direction *= -1
+                # Flip frames
+                self.frames = [pygame.transform.flip(frame, True, False) for frame in self.frames]
+                break
+    
+    def _update_flying(self, dt, platforms, ground_blocks):
+        """Update logic for flying enemies"""
+        # Move up and down
+        self.rect.y += self.speed * self.flight_direction
+        
+        # Check if we've reached the flight limit
+        if self.flight_direction > 0 and self.rect.bottom > self.start_y:
+            self.flight_direction = -1
+        elif self.flight_direction < 0 and self.rect.bottom < self.start_y - self.flight_height:
+            self.flight_direction = 1
+        
+        # Also patrol horizontally like basic enemies
+        self._update_patrol(dt, platforms, ground_blocks)
+    
+    def _update_jumping(self, dt, platforms, ground_blocks):
+        """Update logic for jumping enemies"""
+        # Apply gravity
+        if not self.on_ground:
+            self.velocity_y += self.gravity
+            self.rect.y += self.velocity_y
+        
+        # Check for landing
+        self.on_ground = False
+        for platform in platforms:
+            if self.rect.colliderect(platform.rect) and self.velocity_y > 0:
+                self.rect.bottom = platform.rect.top
+                self.on_ground = True
+                self.velocity_y = 0
+                break
+        
+        for block in ground_blocks:
+            if self.rect.colliderect(block.rect) and self.velocity_y > 0:
+                self.rect.bottom = block.rect.top
+                self.on_ground = True
+                self.velocity_y = 0
+                break
+        
+        # Jump timer
+        if self.on_ground:
+            self.jump_timer += dt
+            if self.jump_timer >= self.jump_interval:
+                self.velocity_y = self.jump_strength
+                self.on_ground = False
+                self.jump_timer = 0
+        
+        # Also patrol horizontally like basic enemies
+        self._update_patrol(dt, platforms, ground_blocks)
+
+</contents/src\sprites\enemy.py>
+<contents/src\sprites\platform.py>
+import pygame
+import os
+
+class Platform(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height, cell_size):
+        super().__init__()
+        
+        # Store original dimensions in cells
+        self.cell_x = x
+        self.cell_y = y
+        self.cell_width = width
+        self.cell_height = height
+        self.cell_size = cell_size
+        
+        # Convert to pixels
+        pixel_x = x * cell_size
+        pixel_y = y * cell_size
+        pixel_width = width * cell_size
+        pixel_height = height * cell_size
+        
+        # Get platform image path from level if available, or use default
+        platform_path = None
+        try:
+            # Custom platform texture from the level data
+            from level import Level
+            if hasattr(Level, 'current_instance') and Level.current_instance and \
+               'assets' in Level.current_instance.level_data and \
+               'platform_image' in Level.current_instance.level_data['assets']:
+                platform_path = Level.current_instance.level_data['assets']['platform_image']
+        except (ImportError, AttributeError):
+            pass
+        
+        # If no specific path or not found, use the default
+        if not platform_path:
+            platform_path = os.path.join('resources', 'graphics', 'platform.png')
+        
+        try:
+            # Try to load platform texture
+            self.image = pygame.image.load(platform_path).convert_alpha()
+            self.image = pygame.transform.scale(self.image, (pixel_width, pixel_height))
+        except (pygame.error, FileNotFoundError) as e:
+            # Create fallback image - visible rectangle for platforms
+            self.image = pygame.Surface((pixel_width, pixel_height))
+            self.image.fill((150, 75, 0))  # Brown color
+            
+            # Add some visual detail 
+            pygame.draw.rect(self.image, (180, 100, 20), 
+                            pygame.Rect(2, 2, pixel_width-4, pixel_height-4))
+        
+        # Create rect
+        self.rect = self.image.get_rect()
+        self.rect.x = pixel_x
+        self.rect.y = pixel_y
+
+class GroundBlock(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, cell_size):
+        super().__init__()
+        
+        # Store original dimensions in cells
+        self.cell_x = x
+        self.cell_y = y
+        self.cell_width = width
+        self.cell_size = cell_size
+        
+        # Convert to pixels
+        pixel_x = x * cell_size
+        pixel_y = y * cell_size
+        pixel_width = width * cell_size
+        pixel_height = cell_size  # Ground blocks are 1 cell tall
+        
+        # Create ground block surface
+        self.image = pygame.Surface((pixel_width, pixel_height), pygame.SRCALPHA)
+        
+        # By default, ground is transparent (invisible)
+        self.image.fill((0, 0, 0, 0))
+        
+        # Store the debug version (visible) of the ground block separately
+        self.debug_image = pygame.Surface((pixel_width, pixel_height), pygame.SRCALPHA)
+        pygame.draw.rect(self.debug_image, (0, 255, 0, 100), pygame.Rect(0, 0, pixel_width, pixel_height))
+        
+        # Add border for clarity
+        pygame.draw.rect(self.debug_image, (0, 200, 0, 180), pygame.Rect(0, 0, pixel_width, pixel_height), 2)
+        
+        # Create rect
+        self.rect = self.image.get_rect()
+        self.rect.x = pixel_x
+        self.rect.y = pixel_y
+
+</contents/src\sprites\platform.py>
+<contents/src\sprites\player.py>
+import pygame
+import pygame.mixer
+import os
+from enum import Enum, auto
+from utils.constants import GRAVITY, PLAYER_SPEED, JUMP_STRENGTH, TERMINAL_VELOCITY
+
+class Direction(Enum):
+    NORTH = auto()
+    EAST = auto()
+    SOUTH = auto()
+    WEST = auto()
+    
+    @staticmethod
+    def from_movement(dx, dy):
+        """Convert movement to direction"""
+        if dx > 0:
+            return Direction.EAST
+        elif dx < 0:
+            return Direction.WEST
+        elif dy < 0:  # Negative y is up in pygame
+            return Direction.NORTH
+        elif dy > 0:
+            return Direction.SOUTH
+        else:
+            return None  # No movement
+
+class AnimationState(Enum):
+    IDLE = auto()
+    WALKING = auto()
+    JUMPING = auto()
+
+class Player(pygame.sprite.Sprite):
+    def __init__(self, x, y, cell_size):
+        super().__init__()
+        self.cell_size = cell_size
+        
+        # Load sprite sheet
+        try:
+            sprite_sheet = pygame.image.load(os.path.join('resources', 'graphics', 'scientist_ss.png')).convert_alpha()
+        except pygame.error:
+            # Create fallback surface
+            sprite_sheet = pygame.Surface((64, 64))
+            sprite_sheet.fill((255, 0, 255))  # Magenta for missing texture
+        
+        # Calculate frame size
+        sheet_width, sheet_height = sprite_sheet.get_size()
+        self.frame_width = sheet_width // 4
+        self.frame_height = sheet_height // 4
+        
+        # Create animation frames
+        self.frames = {}
+        self._create_animation_frames(sprite_sheet)
+        
+        # Initialize state
+        self.direction = Direction.EAST
+        self.animation_state = AnimationState.IDLE
+        self.animation_frame = 0
+        self.animation_speed = 0.15  # Frames per update
+        self.animation_time = 0
+        
+        # Set up physics
+        self.rect = pygame.Rect(0, 0, self.frame_width // 2, self.frame_height)  # Half width rect for better collision
+        self.rect.centerx = x
+        self.rect.bottom = y  # Bottom-aligned for platforms
+        
+        # Create foot rect for more precise ground detection
+        self.foot_rect = pygame.Rect(0, 0, self.rect.width // 2, 10)
+        self.update_foot_rect()
+        
+        self.velocity_x = 0
+        self.velocity_y = 0
+        self.on_ground = False
+        
+        # Ground check stability
+        self.ground_buffer = 0  # Frames to remain "on ground" after leaving ground
+        self.ground_buffer_max = 5  # Max frames to buffer ground state
+        
+        # Jump control
+        self.jump_cooldown = 0
+        self.can_jump = True
+        self.jumping = False
+        self.jump_released = True  # To prevent holding the jump key
+        
+        # Update image
+        self.update_image()
+    
+    def _create_animation_frames(self, sprite_sheet):
+        """Create animation frames from sprite sheet"""
+        # Initialize direction frames
+        for direction in Direction:
+            self.frames[direction] = []
+        
+        # Extract frames for each direction (4x4 grid)
+        for row, direction in enumerate([Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST]):
+            for col in range(4):
+                # Extract frame from sprite sheet
+                frame = pygame.Surface((self.frame_width, self.frame_height), pygame.SRCALPHA)
+                frame.blit(sprite_sheet, (0, 0), (
+                    col * self.frame_width, 
+                    row * self.frame_height, 
+                    self.frame_width, 
+                    self.frame_height
+                ))
+                
+                self.frames[direction].append(frame)
+    
+    def update_image(self):
+        """Update the current image based on state"""
+        if self.animation_state == AnimationState.IDLE:
+            # Use 4th frame (index 3) for idle
+            self.image = self.frames[self.direction][3]
+        else:
+            # Use current animation frame for other states
+            frame_index = int(self.animation_frame) % 4
+            self.image = self.frames[self.direction][frame_index]
+        
+        # Position the rect - IMPORTANT: Don't replace the rect, just update its size and position
+        old_centerx = self.rect.centerx
+        old_bottom = self.rect.bottom
+        self.rect.width = self.frame_width // 2  # Keep half width for better collisions
+        self.rect.height = self.frame_height
+        self.rect.centerx = old_centerx
+        self.rect.bottom = old_bottom
+        
+        # Update foot rect position
+        self.update_foot_rect()
+        
+    def update_foot_rect(self):
+        """Update the foot rectangle position to match the player's position"""
+        self.foot_rect.width = self.rect.width // 2
+        self.foot_rect.height = 10
+        self.foot_rect.centerx = self.rect.centerx
+        self.foot_rect.bottom = self.rect.bottom
+    
+    def update(self, dt, platforms, ground_blocks):
+        """Update player state"""
+        # Store old position for collision detection
+        old_x = self.rect.x
+        old_y = self.rect.y
+        
+        # Update jump cooldown
+        if self.jump_cooldown > 0:
+            self.jump_cooldown -= dt
+            if self.jump_cooldown <= 0:
+                self.jump_cooldown = 0
+                self.can_jump = True
+        
+        # Remember previous ground state before any collision checks
+        was_on_ground = self.on_ground
+        
+        # Handle ground buffer for stability (coyote time)
+        if was_on_ground and self.ground_buffer <= 0:
+            # If truly on ground, keep ground buffer at max
+            self.ground_buffer = self.ground_buffer_max
+        elif self.ground_buffer > 0:
+            # Decrement ground buffer if we're not physically on ground
+            self.ground_buffer -= 1
+        
+        # Apply gravity only if jumping or falling
+        if self.jumping or not (was_on_ground or self.ground_buffer > 0):
+            self.velocity_y += GRAVITY
+            if self.velocity_y > TERMINAL_VELOCITY:
+                self.velocity_y = TERMINAL_VELOCITY
+        
+        # Track if jump state should end
+        if self.jumping and self.velocity_y > 0:  # Reached apex, now falling
+            self.jumping = False
+        
+        # Update horizontal position first
+        self.rect.x += int(self.velocity_x)
+        self.update_foot_rect()
+        
+        # Horizontal collision detection
+        self.check_horizontal_collisions(platforms, ground_blocks, old_x)
+        
+        # Then update vertical position
+        self.rect.y += int(self.velocity_y)
+        self.update_foot_rect()
+        
+        # Reset ground state to check actual collision
+        self.on_ground = False
+        
+        # Vertical collision detection
+        self.check_vertical_collisions(platforms, ground_blocks, old_y)
+        
+        # Update jump state when landing
+        if self.on_ground and not was_on_ground:
+            self.jumping = False
+            self.can_jump = True
+            self.ground_buffer = self.ground_buffer_max
+        
+        # Determine on_ground state using both physical contact and ground buffer
+        effective_on_ground = self.on_ground or (self.ground_buffer > 0 and self.velocity_y >= 0)
+        
+        # Update animation state
+        if self.jumping:
+            self.animation_state = AnimationState.JUMPING
+        elif effective_on_ground:
+            if self.velocity_x != 0:
+                self.animation_state = AnimationState.WALKING
+                self.direction = Direction.EAST if self.velocity_x > 0 else Direction.WEST
+            else:
+                self.animation_state = AnimationState.IDLE
+        else:
+            self.animation_state = AnimationState.JUMPING
+        
+        # Update animation frame
+        if self.animation_state != AnimationState.IDLE:
+            self.animation_time += dt
+            if self.animation_time >= self.animation_speed:
+                self.animation_frame += 1
+                if self.animation_frame >= 4:
+                    self.animation_frame = 0
+                self.animation_time = 0
+        
+        # Update image
+        self.update_image()
+    
+    def check_horizontal_collisions(self, platforms, ground_blocks, old_x):
+        """Check and resolve horizontal collisions"""
+        # Check platform collisions
+        for platform in platforms:
+            if self.rect.colliderect(platform.rect):
+                # Moving right, hit left side of platform
+                if self.velocity_x > 0:
+                    self.rect.right = platform.rect.left
+                # Moving left, hit right side of platform
+                elif self.velocity_x < 0:
+                    self.rect.left = platform.rect.right
+                self.velocity_x = 0
+                self.update_foot_rect()  # Update foot rect after position change
+        
+        # Check ground block collisions
+        for block in ground_blocks:
+            if self.rect.colliderect(block.rect):
+                # Moving right, hit left side of block
+                if self.velocity_x > 0:
+                    self.rect.right = block.rect.left
+                # Moving left, hit right side of block
+                elif self.velocity_x < 0:
+                    self.rect.left = block.rect.right
+                self.velocity_x = 0
+                self.update_foot_rect()  # Update foot rect after position change
+    
+    def check_vertical_collisions(self, platforms, ground_blocks, old_y):
+        """Check and resolve vertical collisions"""
+        self.on_ground = False
+        
+        # Special ground sensor rect (extends a bit below player feet)
+        ground_sensor = pygame.Rect(self.foot_rect)
+        ground_sensor.height = 12  # Extend foot rect more to ensure better ground detection
+        ground_sensor.bottom = self.rect.bottom + 2  # Actually check slightly below feet
+        
+        # Check platform collisions
+        for platform in platforms:
+            # First check if we could be standing on the platform (using ground sensor)
+            if ground_sensor.colliderect(platform.rect) and self.velocity_y >= 0:
+                # Adjust to stand exactly on the platform
+                self.rect.bottom = platform.rect.top
+                self.on_ground = True
+                self.velocity_y = 0
+                self.update_foot_rect()
+                break
+                
+            # Check standard collision (for hitting platform from below/sides)
+            elif self.rect.colliderect(platform.rect):
+                # Moving up, hit bottom of platform
+                if self.velocity_y < 0:
+                    self.rect.top = platform.rect.bottom
+                    self.velocity_y = 0
+                    self.update_foot_rect()
+        
+        # Check ground block collisions (only if not already on a platform)
+        if not self.on_ground:
+            # Use ground sensor for more precise and stable ground detection
+            for block in ground_blocks:
+                if ground_sensor.colliderect(block.rect) and self.velocity_y >= 0:
+                    # Set position exactly at ground level
+                    self.rect.bottom = block.rect.top
+                    self.on_ground = True
+                    self.velocity_y = 0
+                    self.update_foot_rect()
+                    break
+            
+            # If still not on ground, check body collisions for hitting ceiling/walls
+            if not self.on_ground:
+                for block in ground_blocks:
+                    if self.rect.colliderect(block.rect):
+                        # Moving up, hit bottom of ground block
+                        if self.velocity_y < 0:
+                            self.rect.top = block.rect.bottom
+                            self.velocity_y = 0
+                            self.update_foot_rect()
+                        # Could still be a ground collision on the edge cases
+                        elif self.velocity_y > 0:
+                            # Check if we can stand on this block
+                            distance_into_block = self.rect.bottom - block.rect.top
+                            if distance_into_block < 20:  # Allow more tolerance for fixing position
+                                self.rect.bottom = block.rect.top
+                                self.on_ground = True
+                                self.velocity_y = 0
+                                self.update_foot_rect()
+        
+        # Always ensure foot rect is aligned with player position
+        self.update_foot_rect()
+    
+    def handle_event(self, event):
+        """Handle player input events"""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                self.velocity_x = -PLAYER_SPEED
+            elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                self.velocity_x = PLAYER_SPEED
+            elif event.key == pygame.K_SPACE or event.key == pygame.K_UP or event.key == pygame.K_w:
+                # Simple jump mechanic - jump immediately when key is pressed
+                jumped = self.jump()
+                
+                # Play sound on successful jump
+                if jumped:
+                    try:
+                        from level import Level
+                        if Level.current_instance and Level.current_instance.game and hasattr(Level.current_instance.game, 'jump_sound'):
+                            Level.current_instance.game.jump_sound.play()
+                    except (ImportError, AttributeError, ValueError) as e:
+                        pass
+        
+        elif event.type == pygame.KEYUP:
+            if event.key in [pygame.K_LEFT, pygame.K_a] and self.velocity_x < 0:
+                self.velocity_x = 0
+            elif event.key in [pygame.K_RIGHT, pygame.K_d] and self.velocity_x > 0:
+                self.velocity_x = 0
+            # Reset jump key released state when jump key is released
+            elif event.key in [pygame.K_SPACE, pygame.K_UP, pygame.K_w]:
+                self.jump_released = True
+    
+    def jump(self):
+        """Make the player jump (simple implementation)"""
+        # Determine if player can jump using either actual ground contact or buffer (coyote time)
+        effective_on_ground = self.on_ground or (self.ground_buffer > 0 and self.velocity_y >= 0)
+        
+        if effective_on_ground and self.can_jump and self.jump_released:
+            # Set jump cooldown to prevent immediate rejump
+            self.jump_cooldown = 0.2  # 200ms cooldown
+            self.can_jump = False
+            
+            # Set jump state
+            self.jumping = True
+            self.on_ground = False  # Force off ground immediately
+            self.ground_buffer = 0  # Clear ground buffer
+            
+            # Set jump velocity
+            self.velocity_y = JUMP_STRENGTH
+            self.animation_state = AnimationState.JUMPING
+            
+            # Move the player up by 5 pixels to ensure they're not still touching the ground
+            # This prevents the stuttering jump issue where the player immediately gets set back to on_ground
+            self.rect.y -= 5
+            self.update_foot_rect()
+            
+            # Mark jump key as not released yet (requires releasing before next jump)
+            self.jump_released = False
+            
+            return True
+            
+        return False
+
+</contents/src\sprites\player.py>
+<contents/src\sprites\__init__.py>
+# Sprites package
+</contents/src\sprites\__init__.py>
+
+
+<contents/src\utils\constants.py>
+# Game constants
+
+# Display settings
+SCREEN_WIDTH = 960
+SCREEN_HEIGHT = 512
+FPS = 60
+TITLE = "Parallax Sidescroller Engine"
+
+# Physics settings
+GRAVITY = 0.6
+PLAYER_SPEED = 5
+JUMP_STRENGTH = -15
+TERMINAL_VELOCITY = 16
+
+# Player settings
+PLAYER_START_X = 4  # 4th cell from left
+
+# Debug settings
+DEBUG = False
+
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+GRAY = (150, 150, 150)
+
+# UI settings
+FONT_SIZE = 24
+MENU_TITLE_SIZE = 48
+MENU_OPTION_SIZE = 36
+MENU_PADDING = 20
+
+</contents/src\utils\constants.py>
+<contents/src\utils\__init__.py>
+# Utils package
+</contents/src\utils\__init__.py>
+
+
+

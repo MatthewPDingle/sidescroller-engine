@@ -1,0 +1,198 @@
+# Parallax Sidescroller Game & Level Editor Design Specification
+
+## Overview
+
+This specification outlines the requirements for a 2D parallax sidescroller game and accompanying level editor. The document focuses on functionality without prescribing specific implementation methods.
+
+## I. Level Editor
+
+### Core Functionality
+
+1. **Grid System**
+   - Variable square grid cell size (default: 32×32 pixels)
+   - Configurable via UI
+   - Visual grid overlay toggle
+
+2. **Foreground Management**
+   - Support for variable-sized foreground images
+   - Standard height of 512 pixels (most common use case)
+   - Width can vary based on asset
+   - Automatic UI adjustment to match loaded foreground height
+
+3. **Level Configuration**
+   - Configurable level width in grid cells
+   - Level width determines foreground image handling:
+     * If level width exceeds foreground width: tile image horizontally
+     * If level width is less than foreground width: use partial image
+   - Example: A 512×1024px foreground with 32px cells gives a 16×32 cell level
+     * Setting width to 64 cells would tile image twice horizontally
+     * Setting width to 16 cells would use only left half of image
+
+4. **Placement Tools**
+   - **Platform Tool**: Place/resize rectangular platforms
+     * Click and drag to determine width
+     * Platforms are collision surfaces for the player
+   - **Ground Tool**: Paint ground terrain
+     * Click and drag to paint multiple cells
+     * Adjacent ground cells merge for optimization
+   - **Enemy Tool**: Place enemies at specific locations
+     * Character and enemy placement positions correspond to bottom-center of sprite
+   - **Deletion Tool**: Remove any placed element
+
+5. **Camera Navigation**
+   - Scroll view to navigate wide levels
+   - Reset view to origin
+   - View coordinates display (pixel and cell)
+
+6. **File Operations**
+   - Save level to external file (JSON)
+   - Load existing level
+   - Compatible with game engine format
+
+7. **Visual Aids**
+   - Toggleable grid overlay
+   - Current mouse position in both pixels and grid cells
+   - Help screen with control information
+   - Visual preview of placement before confirming
+
+### User Interface
+
+1. **Tool Selection**
+   - Easy switching between placement tools
+   - Clear visual indication of active tool
+
+2. **Status Display**
+   - Current level dimensions
+   - Camera position
+   - Element counts (platforms, enemies, ground blocks)
+
+3. **Controls**
+   - Mouse-driven placement
+   - Keyboard shortcuts for common operations
+   - Camera navigation controls
+
+## II. Game Engine
+
+### Core Functionality
+
+1. **Level Loading**
+   - Load levels created in the editor
+   - Initialize all game elements from level data
+
+2. **Player Character**
+   - Movement controls (left/right)
+   - Jumping mechanics
+   - Collision with platforms and ground
+   - Animation states:
+     * Idle: Use 2nd, 6th, 10th, and 14th frames in sprite sheet (assuming left-to-right, top-to-bottom ordering)
+     * Walking: Appropriate animation frames
+     * Jumping: Appropriate animation frames
+
+3. **Parallax Background System**
+   - Support different width background/foreground images (same height)
+   - Background scrolls at 1/4 the rate of foreground
+   - Both background and foreground tile horizontally
+   - All gameplay elements (character, enemies, platforms, ground) align with foreground
+
+4. **Camera System**
+   - Player centered in screen during normal movement
+   - Camera stops at level boundaries
+   - Player can move to screen edges when at level boundaries
+
+5. **Collision System**
+   - Detection for platforms and ground
+   - Enemy collision handling
+   - Level boundary enforcement
+
+6. **Audio System**
+   - Background music
+   - Sound effects for player actions
+   - Volume control
+
+7. **Debug Features**
+   - Toggleable grid overlay showing cell boundaries
+   - Position information display
+   - Visual highlighting of current player cell
+
+### Display Configuration
+
+1. **Window Modes**
+   - Windowed mode (default)
+   - Resizable window (maintaining 16:9 aspect ratio)
+   - Fullscreen mode
+
+2. **Resolution Handling**
+   - Default resolution with 16:9 aspect ratio
+   - Proper scaling of game elements when resized
+   - UI elements properly positioned at all resolutions
+
+## III. Coordinate Systems
+
+1. **World Coordinates**
+   - Absolute positions in the game world (in pixels)
+   - Origin (0,0) at top-left corner of level
+
+2. **Grid Coordinates**
+   - Positions in cell units (based on configurable cell size)
+   - Used for level design and debug display
+
+3. **Screen Coordinates**
+   - Positions relative to the visible screen
+   - Used for rendering elements
+
+4. **Foreground Coordinate System**
+   - All gameplay elements (ground, platforms, characters, enemies) share the foreground coordinate system
+   - Character and enemy placement positioned at bottom-center of sprite
+
+5. **Parallax Relationship**
+   - Background scrolls at 1/4 the speed of foreground
+   - Foreground coordinate system determines collision and interaction
+
+## IV. Data Structures
+
+1. **Level Data**
+   - Level dimensions (width and height in cells)
+   - Cell size in pixels
+   - Platforms: Array of {x, y, width, height} in cell coordinates
+   - Ground blocks: Array of {x, y, width} in cell coordinates
+   - Enemies: Array of {x, y, type} in cell coordinates
+
+2. **Asset References**
+   - Paths to background and foreground images
+   - Paths to character and enemy sprites
+   - Paths to audio resources
+
+## V. Technical Considerations
+
+1. **Performance**
+   - Efficient rendering of visible elements only
+   - Proper asset management
+   - Smooth scrolling and animation
+
+2. **Compatibility**
+   - Level file format compatible between editor and game
+   - Consistent interpretation of coordinates and dimensions
+
+3. **Asset Handling**
+   - Support for variable-sized background/foreground images
+   - Character/enemy sprite positioning relative to bottom-center
+   - Proper tiling of backgrounds based on level width
+
+4. **Error Handling**
+   - Graceful handling of missing assets
+   - Validation of level data
+   - User feedback for error conditions
+
+## Implementation Notes
+
+1. When implementing coordinate transformations, ensure:
+   - Correct alignment between visual grid and gameplay elements
+   - Accurate collision detection accounting for parallax ratio
+   - Proper placement of character/enemy sprites (bottom-center alignment)
+
+2. When implementing the debug overlay:
+   - Display both pixel coordinates and cell coordinates
+   - Grid overlay should align with foreground coordinate system
+   - Visual indication of player's current cell
+
+This specification describes the functionality without mandating specific implementation technologies or approaches, while ensuring all the requested features are properly addressed.
