@@ -42,6 +42,96 @@
       "y": 8,
       "width": 4,
       "height": 1
+    },
+    {
+      "x": 42,
+      "y": 11,
+      "width": 2,
+      "height": 1
+    },
+    {
+      "x": 44,
+      "y": 14,
+      "width": 2,
+      "height": 1
+    },
+    {
+      "x": 83,
+      "y": 14,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 84,
+      "y": 13,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 85,
+      "y": 12,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 86,
+      "y": 11,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 87,
+      "y": 10,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 88,
+      "y": 9,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 89,
+      "y": 8,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 90,
+      "y": 9,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 91,
+      "y": 10,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 92,
+      "y": 11,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 93,
+      "y": 12,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 94,
+      "y": 13,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 95,
+      "y": 14,
+      "width": 1,
+      "height": 1
     }
   ],
   "ground_blocks": [
@@ -51,7 +141,18 @@
       "width": 128
     }
   ],
-  "enemies": [],
+  "enemies": [
+    {
+      "x": 19,
+      "y": 5,
+      "type": "armadillo"
+    },
+    {
+      "x": 66,
+      "y": 7,
+      "type": "armadillo"
+    }
+  ],
   "assets": {
     "background": "T:\\Dev\\sidescroller-level-editor\\resources\\graphics\\background_2048_512.png",
     "foreground": "T:\\Dev\\sidescroller-level-editor\\resources\\graphics\\foreground_2048_512.png",
@@ -66,7 +167,7 @@
     "bg_scroll_rate": 0.2
   },
   "metadata": {
-    "created": 59369,
+    "created": 45654,
     "editor_version": "1.0"
   }
 }

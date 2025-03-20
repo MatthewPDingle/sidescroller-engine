@@ -4,7 +4,7 @@ import os
 from camera import Camera
 from sprites.player import Player
 from sprites.platform import Platform, GroundBlock
-from sprites.enemy import Enemy, EnemyType
+from sprites.enemy import Enemy, EnemyType, Direction
 from utils.constants import SCREEN_WIDTH, SCREEN_HEIGHT, PLAYER_START_X, DEBUG, WHITE, RED, GREEN
 
 class Level:
@@ -154,10 +154,20 @@ class Level:
         # Create enemies
         for enemy_data in self.level_data.get('enemies', []):
             try:
+                # Try to map enemy type string to enum
                 enemy_type_str = enemy_data.get('type', 'BASIC').upper()
+                # Handle special case mappings
+                if enemy_type_str == 'ARMADILLO':
+                    enemy_type_str = 'BASIC'
+                elif enemy_type_str == 'SCIENTIST':
+                    enemy_type_str = 'JUMPING'
+                
+                # Try to get the actual enum
                 enemy_type = EnemyType[enemy_type_str]
             except (KeyError, ValueError):
+                # Default to BASIC type if not found
                 enemy_type = EnemyType.BASIC
+                print(f"Warning: Unknown enemy type '{enemy_data.get('type')}', defaulting to BASIC")
                 
             enemy = Enemy(
                 enemy_data['x'], 
@@ -333,7 +343,7 @@ class Level:
         fps = self.game.clock.get_fps()
         fps_text = f"FPS: {fps:.1f}"
         text_surface = self.debug_font.render(fps_text, True, WHITE)
-        screen.blit(text_surface, (10, 130))
+        screen.blit(text_surface, (10, 160))
         
         # Draw player rectangles in order of size (largest to smallest)
         
@@ -356,10 +366,36 @@ class Level:
         ground_sensor_screen_rect = self.camera.apply_rect(ground_sensor)
         pygame.draw.rect(screen, (255, 255, 0), ground_sensor_screen_rect, 1)  # Yellow for ground sensor
         
+        # Draw enemy debug info
+        for enemy in self.enemies:
+            # Draw visual rect (purple) for enemies - the sprite's full dimensions
+            enemy_visual_rect = self.camera.apply_rect(enemy.visual_rect)
+            pygame.draw.rect(screen, (255, 0, 255), enemy_visual_rect, 1)  # Purple for enemy visual bounds
+            
+            # Draw collision rect (orange) for enemies - the actual hit box
+            enemy_collision_rect = self.camera.apply_rect(enemy.rect)
+            pygame.draw.rect(screen, (255, 165, 0), enemy_collision_rect, 2)  # Orange for enemy collision
+            
+            # Draw foot rect (cyan) - used for ground detection, just like the player
+            enemy_foot_rect = self.camera.apply_rect(enemy.foot_rect)
+            pygame.draw.rect(screen, (0, 255, 255), enemy_foot_rect, 2)  # Same cyan as player foot box
+            
+            # Draw direction indicator - line showing which way enemy is facing
+            dir_start = enemy_collision_rect.center
+            if enemy.direction == Direction.EAST:
+                dir_end = (dir_start[0] + 20, dir_start[1])
+            elif enemy.direction == Direction.WEST:
+                dir_end = (dir_start[0] - 20, dir_start[1])
+            elif enemy.direction == Direction.NORTH:
+                dir_end = (dir_start[0], dir_start[1] - 20)
+            else:  # Direction.SOUTH
+                dir_end = (dir_start[0], dir_start[1] + 20)
+            pygame.draw.line(screen, (255, 255, 255), dir_start, dir_end, 2)
+        
         # Debug text explaining the rectangles
-        rect_text = "Green: Visual | Red: Collision | Cyan: Feet | Yellow: Ground Sensor"
+        rect_text = "Green/Purple: Visual Bounds | Red/Orange: Collision Box | Cyan: Foot Box"
         text_surface = self.debug_font.render(rect_text, True, WHITE)
-        screen.blit(text_surface, (10, 160))
+        screen.blit(text_surface, (10, 190))
         
         # Draw hint for F3 key
         hint_text = "F3: Toggle Debug Mode"
