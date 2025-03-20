@@ -191,6 +191,15 @@ class Player(pygame.sprite.Sprite):
         if self.jumping and self.velocity_y > 0:  # Reached apex, now falling
             self.jumping = False
         
+        # Check current keyboard state to ensure continuous movement
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            self.velocity_x = -PLAYER_SPEED
+        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.velocity_x = PLAYER_SPEED
+        elif not (keys[pygame.K_LEFT] or keys[pygame.K_a] or keys[pygame.K_RIGHT] or keys[pygame.K_d]):
+            self.velocity_x = 0
+            
         # Update horizontal position first
         self.rect.x += int(self.velocity_x)
         self.update_foot_rect()
@@ -253,12 +262,12 @@ class Player(pygame.sprite.Sprite):
             # Left boundary check
             if self.rect.left < 0:
                 self.rect.left = 0
-                self.velocity_x = 0
+                # Don't reset velocity_x to 0 - player might still be holding the key
                 self.update_foot_rect()
             # Right boundary check
             elif self.rect.right > level_width_pixels:
                 self.rect.right = level_width_pixels
-                self.velocity_x = 0
+                # Don't reset velocity_x to 0 - player might still be holding the key
                 self.update_foot_rect()
         
         # Check platform collisions
@@ -270,7 +279,7 @@ class Player(pygame.sprite.Sprite):
                 # Moving left, hit right side of platform
                 elif self.velocity_x < 0:
                     self.rect.left = platform.rect.right
-                self.velocity_x = 0
+                # Don't reset velocity_x to 0 - we'll use key_get_pressed to determine direction
                 self.update_foot_rect()  # Update foot rect after position change
         
         # Check ground block collisions
@@ -282,7 +291,7 @@ class Player(pygame.sprite.Sprite):
                 # Moving left, hit right side of block
                 elif self.velocity_x < 0:
                     self.rect.left = block.rect.right
-                self.velocity_x = 0
+                # Don't reset velocity_x to 0 - we'll use key_get_pressed to determine direction
                 self.update_foot_rect()  # Update foot rect after position change
     
     def check_vertical_collisions(self, platforms, ground_blocks, old_y):
