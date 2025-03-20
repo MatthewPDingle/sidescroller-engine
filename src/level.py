@@ -380,17 +380,7 @@ class Level:
             enemy_foot_rect = self.camera.apply_rect(enemy.foot_rect)
             pygame.draw.rect(screen, (0, 255, 255), enemy_foot_rect, 2)  # Same cyan as player foot box
             
-            # Draw direction indicator - line showing which way enemy is facing
-            dir_start = enemy_collision_rect.center
-            if enemy.direction == Direction.EAST:
-                dir_end = (dir_start[0] + 20, dir_start[1])
-            elif enemy.direction == Direction.WEST:
-                dir_end = (dir_start[0] - 20, dir_start[1])
-            elif enemy.direction == Direction.NORTH:
-                dir_end = (dir_start[0], dir_start[1] - 20)
-            else:  # Direction.SOUTH
-                dir_end = (dir_start[0], dir_start[1] + 20)
-            pygame.draw.line(screen, (255, 255, 255), dir_start, dir_end, 2)
+            # Direction is indicated by the enemy sprite itself
         
         # Debug text explaining the rectangles
         rect_text = "Green/Purple: Visual Bounds | Red/Orange: Collision Box | Cyan: Foot Box"

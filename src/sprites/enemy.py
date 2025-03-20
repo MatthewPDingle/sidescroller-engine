@@ -70,6 +70,9 @@ class Enemy(pygame.sprite.Sprite):
         # Extract animation frames for all directions
         self.frames = self._create_animation_frames(sprite_sheet)
         
+        # Precalculate tight bounds for each frame to avoid doing this every update
+        self.frame_bounds = self._precalculate_frame_bounds()
+        
         # Animation variables
         self.current_frame = 0
         self.animation_speed = 0.15
@@ -85,15 +88,22 @@ class Enemy(pygame.sprite.Sprite):
         # Position it exactly at the intended position
         self.visual_rect.midbottom = (pixel_x, pixel_y)
         
-        # Step 2: Create collision rect (orange box) - slightly smaller than visual rect
-        # Make it 80% of the width and slightly shorter height
-        collision_width = int(self.frame_width * 0.8)
-        collision_height = int(self.frame_height * 0.9)
-        self.rect = pygame.Rect(0, 0, collision_width, collision_height)
+        # Step 2: Calculate a tighter collision rect (orange box) based on non-transparent pixels
+        # This will provide better collision detection by matching the visible sprite shape
+        collision_width = int(self.frame_width * 0.7)  # Default to 70% if pixel analysis fails
+        collision_height = int(self.frame_height * 0.9)  # Default to 90% if pixel analysis fails
         
-        # Critically important: position the collision rect precisely centered on the visual rect
+        # Use precalculated bounds for the initial frame
+        self.tight_bounds = self.frame_bounds[self.direction.value][0]
+        
+        # Create collision rect using the calculated bounds
+        self.rect = pygame.Rect(0, 0, 
+                               self.tight_bounds[2] - self.tight_bounds[0], 
+                               self.tight_bounds[3] - self.tight_bounds[1])
+        
+        # Critically important: position the collision rect precisely relative to the visual rect
         self.rect.centerx = self.visual_rect.centerx  # Exact horizontal centering
-        self.rect.bottom = self.visual_rect.bottom - 2  # Just slightly above bottom
+        self.rect.bottom = self.visual_rect.bottom  # Align bottom with visual rect
         
         # Step 3: Create foot rect (cyan box) - small rect at bottom center of collision rect
         foot_width = int(self.rect.width * 0.6)  # 60% of collision width
@@ -147,6 +157,69 @@ class Enemy(pygame.sprite.Sprite):
             all_frames[direction.value] = direction_frames
         
         return all_frames
+        
+    def _precalculate_frame_bounds(self):
+        """Precalculate the tight bounds for all animation frames."""
+        bounds = {}
+        
+        # For each direction
+        for direction in Direction:
+            if direction.value not in self.frames:
+                continue
+                
+            direction_bounds = []
+            # For each frame in this direction
+            for frame in self.frames[direction.value]:
+                # Calculate bounds for this frame
+                frame_bounds = self._calculate_tight_bounds(frame)
+                direction_bounds.append(frame_bounds)
+            
+            bounds[direction.value] = direction_bounds
+            
+        return bounds
+    
+    def _calculate_tight_bounds(self, surface):
+        """Calculate tight bounds around non-transparent pixels in a surface.
+        Returns a tuple of (min_x, min_y, max_x, max_y)."""
+        # Get surface dimensions
+        width, height = surface.get_size()
+        
+        # Initialize bounds to extreme values
+        min_x = width
+        min_y = height
+        max_x = 0
+        max_y = 0
+        
+        # Alpha threshold for considering a pixel "solid"
+        # Values below this are considered transparent
+        alpha_threshold = 25
+        
+        # Scan the surface for non-transparent pixels
+        for y in range(height):
+            for x in range(width):
+                # Get the color at this pixel
+                color = surface.get_at((x, y))
+                
+                # Check if this pixel is visible (alpha > threshold)
+                if color[3] > alpha_threshold:  # Alpha is the 4th component (index 3)
+                    # Update bounds
+                    min_x = min(min_x, x)
+                    min_y = min(min_y, y)
+                    max_x = max(max_x, x + 1)  # +1 to get correct width
+                    max_y = max(max_y, y + 1)  # +1 to get correct height
+        
+        # If no non-transparent pixels found, return default bounds
+        if min_x > max_x or min_y > max_y:
+            return (0, 0, width, height)
+            
+        # Add a small buffer (padding) for better collision
+        buffer = 2
+        min_x = max(0, min_x - buffer)
+        min_y = max(0, min_y - buffer)
+        max_x = min(width, max_x + buffer)
+        max_y = min(height, max_y + buffer)
+        
+        return (min_x, min_y, max_x, max_y)
     
     def update_visual_rect(self):
         """Update the visual rectangle to match current sprite"""
@@ -160,6 +233,23 @@ class Enemy(pygame.sprite.Sprite):
         self.foot_rect.height = 8
         self.foot_rect.centerx = self.rect.centerx
         self.foot_rect.bottom = self.rect.bottom
+        
+    def update_collision_bounds_for_frame(self):
+        """Update collision rectangle based on the current frame's non-transparent pixels"""
+        # Use the precalculated bounds for the current frame and direction
+        new_bounds = self.frame_bounds[self.direction.value][self.current_frame]
+        
+        # Store the current position
+        old_centerx = self.rect.centerx
+        old_bottom = self.rect.bottom
+        
+        # Update collision rect with new dimensions
+        self.rect.width = new_bounds[2] - new_bounds[0] 
+        self.rect.height = new_bounds[3] - new_bounds[1]
+        
+        # Restore position
+        self.rect.centerx = old_centerx
+        self.rect.bottom = old_bottom
     
     def update(self, dt, platforms, ground_blocks):
         """Update enemy based on its type"""
@@ -198,6 +288,9 @@ class Enemy(pygame.sprite.Sprite):
             
             # Use the correct set of frames based on direction
             self.image = self.frames[self.direction.value][self.current_frame]
+            
+            # Update collision rectangle based on the current frame's non-transparent pixels
+            self.update_collision_bounds_for_frame()
     
     def check_ground_collisions(self, platforms, ground_blocks):
         """Check if enemy is on ground"""
@@ -259,14 +352,25 @@ class Enemy(pygame.sprite.Sprite):
             self.update_foot_rect()  # Update foot rect after horizontal position change
             
             # Check if we've reached the patrol limit
+            old_direction = self.direction
             if self.direction == Direction.EAST and self.rect.centerx > self.start_x + self.patrol_distance:
                 self.direction = Direction.WEST
             elif self.direction == Direction.WEST and self.rect.centerx < self.start_x - self.patrol_distance:
                 self.direction = Direction.EAST
+                
+            # If direction changed, immediately update collision bounds for the new direction
+            if old_direction != self.direction:
+                # Update the sprite image for the new direction
+                self.image = self.frames[self.direction.value][self.current_frame]
+                
+                # Update collision bounds for the new direction's frame
+                self.update_collision_bounds_for_frame()
             
             # Check for horizontal collisions
             for platform in platforms:
                 if self.rect.colliderect(platform.rect):
+                    # Save old direction
+                    old_direction = self.direction
                     # Reverse direction
                     self.direction = Direction.WEST if self.direction == Direction.EAST else Direction.EAST
                     # Reset position to avoid getting stuck
@@ -274,11 +378,22 @@ class Enemy(pygame.sprite.Sprite):
                         self.rect.left = platform.rect.right
                     else:
                         self.rect.right = platform.rect.left
+                    
+                    # If direction changed, immediately update collision bounds for the new direction
+                    if old_direction != self.direction:
+                        # Update the sprite image for the new direction
+                        self.image = self.frames[self.direction.value][self.current_frame]
+                        
+                        # Update collision bounds for the new direction's frame
+                        self.update_collision_bounds_for_frame()
+                    
                     self.update_foot_rect()  # Update foot rect after collision repositioning
                     break
             
             for block in ground_blocks:
                 if self.rect.colliderect(block.rect):
+                    # Save old direction
+                    old_direction = self.direction
                     # Reverse direction
                     self.direction = Direction.WEST if self.direction == Direction.EAST else Direction.EAST
                     # Reset position to avoid getting stuck
@@ -286,6 +401,15 @@ class Enemy(pygame.sprite.Sprite):
                         self.rect.left = block.rect.right
                     else:
                         self.rect.right = block.rect.left
+                    
+                    # If direction changed, immediately update collision bounds for the new direction
+                    if old_direction != self.direction:
+                        # Update the sprite image for the new direction
+                        self.image = self.frames[self.direction.value][self.current_frame]
+                        
+                        # Update collision bounds for the new direction's frame
+                        self.update_collision_bounds_for_frame()
+                    
                     self.update_foot_rect()  # Update foot rect after collision repositioning
                     break
     
@@ -307,10 +431,19 @@ class Enemy(pygame.sprite.Sprite):
         self.update_foot_rect()  # Update foot rect after horizontal movement
         
         # Check if we've reached the patrol limit
+        old_direction = self.direction
         if self.direction == Direction.EAST and self.rect.centerx > self.start_x + self.patrol_distance:
             self.direction = Direction.WEST
         elif self.direction == Direction.WEST and self.rect.centerx < self.start_x - self.patrol_distance:
             self.direction = Direction.EAST
+            
+        # If direction changed, immediately update collision bounds for the new direction
+        if old_direction != self.direction:
+            # Update the sprite image for the new direction
+            self.image = self.frames[self.direction.value][self.current_frame]
+            
+            # Update collision bounds for the new direction's frame
+            self.update_collision_bounds_for_frame()
     
     def _update_jumping(self, dt, platforms, ground_blocks):
         """Update logic for jumping enemies"""
@@ -328,7 +461,16 @@ class Enemy(pygame.sprite.Sprite):
             # Check if there's ground ahead before moving
             if not self.check_edge(platforms, ground_blocks):
                 # No ground ahead - reverse direction
+                old_direction = self.direction
                 self.direction = Direction.WEST if self.direction == Direction.EAST else Direction.EAST
+                
+                # If direction changed, immediately update collision bounds for the new direction
+                if old_direction != self.direction:
+                    # Update the sprite image for the new direction
+                    self.image = self.frames[self.direction.value][self.current_frame]
+                    
+                    # Update collision bounds for the new direction's frame
+                    self.update_collision_bounds_for_frame()
             
             # Set velocity based on direction
             self.velocity_x = self.speed if self.direction == Direction.EAST else -self.speed
@@ -338,7 +480,16 @@ class Enemy(pygame.sprite.Sprite):
             self.update_foot_rect()  # Update foot rect after horizontal movement
             
             # Check if we've reached the patrol limit
+            old_direction = self.direction
             if self.direction == Direction.EAST and self.rect.centerx > self.start_x + self.patrol_distance:
                 self.direction = Direction.WEST
             elif self.direction == Direction.WEST and self.rect.centerx < self.start_x - self.patrol_distance:
                 self.direction = Direction.EAST
+                
+            # If direction changed, immediately update collision bounds for the new direction
+            if old_direction != self.direction:
+                # Update the sprite image for the new direction
+                self.image = self.frames[self.direction.value][self.current_frame]
+                
+                # Update collision bounds for the new direction's frame
+                self.update_collision_bounds_for_frame()
