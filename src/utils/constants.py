@@ -16,7 +16,7 @@ TERMINAL_VELOCITY = 16
 PLAYER_START_X = 4  # 4th cell from left
 
 # Debug settings
-DEBUG = False
+DEBUG = True
 
 # Colors
 WHITE = (255, 255, 255)

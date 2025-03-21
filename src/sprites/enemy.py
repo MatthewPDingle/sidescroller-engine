@@ -1,7 +1,14 @@
 import pygame
 import os
 from enum import Enum, auto
-from utils.constants import GRAVITY, TERMINAL_VELOCITY
+
+# Handle imports differently depending on context (game vs tests)
+try:
+    # First try the normal import (when running the game)
+    from utils.constants import GRAVITY, TERMINAL_VELOCITY, DEBUG
+except ImportError:
+    # If that fails, try the absolute import (when running tests)
+    from src.utils.constants import GRAVITY, TERMINAL_VELOCITY, DEBUG
 
 class EnemyType(Enum):
     BASIC = auto()
@@ -58,9 +65,11 @@ class Enemy(pygame.sprite.Sprite):
             sprite_sheet = pygame.image.load(sprite_sheet_path).convert_alpha()
         except pygame.error:
             # Fallback sprite if even the armadillo sprite is missing
-            print(f"Error: Could not load enemy sprite from {sprite_sheet_path}")
-            sprite_sheet = pygame.Surface((64, 64))
-            sprite_sheet.fill((255, 0, 0))  # Red for missing texture
+            if DEBUG:
+                print(f"Warning: Could not load enemy sprite from {sprite_sheet_path}")
+            # Create a simple fallback sprite with four frames for each direction
+            sprite_sheet = pygame.Surface((64*4, 64*4), pygame.SRCALPHA)
+            sprite_sheet.fill((255, 0, 0, 0))  # Transparent red
         
         # Calculate frame size
         sheet_width, sheet_height = sprite_sheet.get_size()
@@ -90,16 +99,24 @@ class Enemy(pygame.sprite.Sprite):
         
         # Step 2: Calculate a tighter collision rect (orange box) based on non-transparent pixels
         # This will provide better collision detection by matching the visible sprite shape
-        collision_width = int(self.frame_width * 0.7)  # Default to 70% if pixel analysis fails
-        collision_height = int(self.frame_height * 0.9)  # Default to 90% if pixel analysis fails
         
-        # Use precalculated bounds for the initial frame
-        self.tight_bounds = self.frame_bounds[self.direction.value][0]
+        # Use precalculated bounds for the initial frame (first frame of current direction)
+        initial_bounds = self.frame_bounds[self.direction.value][self.current_frame]
+        self.tight_bounds = initial_bounds
         
-        # Create collision rect using the calculated bounds
-        self.rect = pygame.Rect(0, 0, 
-                               self.tight_bounds[2] - self.tight_bounds[0], 
-                               self.tight_bounds[3] - self.tight_bounds[1])
+        # Create collision rect using the calculated bounds for the current frame
+        collision_width = initial_bounds[2] - initial_bounds[0]
+        collision_height = initial_bounds[3] - initial_bounds[1]
+        
+        # Store bounds offsets for accurate debug rendering
+        self.bounds_offset_x = initial_bounds[0]
+        self.bounds_offset_y = initial_bounds[1]
+        
+        # Create the collision rect with the precise dimensions from the bounds
+        # This will be our orange bounding box in debug mode
+        if DEBUG:
+            print(f"Creating initial collision rect with size: {collision_width}x{collision_height}")
+        self.rect = pygame.Rect(0, 0, collision_width, collision_height)
         
         # Critically important: position the collision rect precisely relative to the visual rect
         self.rect.centerx = self.visual_rect.centerx  # Exact horizontal centering
@@ -146,16 +163,28 @@ class Enemy(pygame.sprite.Sprite):
             for col in range(4):
                 # Extract frame from sprite sheet
                 frame = pygame.Surface((self.frame_width, self.frame_height), pygame.SRCALPHA)
+                
+                # Clear the surface with full transparency
+                frame.fill((0, 0, 0, 0))
+                
+                # Extract the specific frame from the sprite sheet
                 frame.blit(sprite_sheet, (0, 0), (
                     col * self.frame_width, 
                     row * self.frame_height, 
                     self.frame_width, 
                     self.frame_height
                 ))
+                
+                # Ensure the frame has alpha channel
+                if frame.get_alpha() is None:
+                    frame = frame.convert_alpha()
+                
                 direction_frames.append(frame)
             
             all_frames[direction.value] = direction_frames
         
+        if DEBUG:
+            print(f"Created {sum(len(frames) for frames in all_frames.values())} animation frames")
         return all_frames
         
     def _precalculate_frame_bounds(self):
@@ -184,6 +213,16 @@ class Enemy(pygame.sprite.Sprite):
         # Get surface dimensions
         width, height = surface.get_size()
         
+        if width == 0 or height == 0:
+            if DEBUG:
+                print("WARNING: Surface has zero dimension")
+            return (0, 0, max(1, width), max(1, height))
+        
+        # Make sure the surface has alpha channel
+        if surface.get_alpha() is None and surface.get_bitsize() < 32:
+            # Convert to a format with alpha channel
+            surface = surface.convert_alpha()
+        
         # Initialize bounds to extreme values
         min_x = width
         min_y = height
@@ -194,38 +233,68 @@ class Enemy(pygame.sprite.Sprite):
         # Values below this are considered transparent
         alpha_threshold = 25
         
+        # Flag to check if any non-transparent pixels were found
+        found_pixels = False
+        
         # Scan the surface for non-transparent pixels
         for y in range(height):
             for x in range(width):
-                # Get the color at this pixel
-                color = surface.get_at((x, y))
-                
-                # Check if this pixel is visible (alpha > threshold)
-                if color[3] > alpha_threshold:  # Alpha is the 4th component (index 3)
-                    # Update bounds
-                    min_x = min(min_x, x)
-                    min_y = min(min_y, y)
-                    max_x = max(max_x, x + 1)  # +1 to get correct width
-                    max_y = max(max_y, y + 1)  # +1 to get correct height
+                try:
+                    # Get the color at this pixel
+                    color = surface.get_at((x, y))
+                    
+                    # Check if this pixel is visible (alpha > threshold)
+                    if len(color) > 3 and color[3] > alpha_threshold:  # Alpha is the 4th component
+                        # Update bounds
+                        min_x = min(min_x, x)
+                        min_y = min(min_y, y)
+                        max_x = max(max_x, x + 1)  # +1 to get correct width
+                        max_y = max(max_y, y + 1)  # +1 to get correct height
+                        found_pixels = True
+                except IndexError:
+                    # Skip problematic pixels
+                    continue
         
         # If no non-transparent pixels found, return default bounds
-        if min_x > max_x or min_y > max_y:
-            return (0, 0, width, height)
+        if not found_pixels or min_x > max_x or min_y > max_y:
+            if DEBUG:
+                print(f"No visible pixels found, using default bounds for {width}x{height} surface")
+            # Ensure we don't return zero width/height bounds
+            return (0, 0, max(1, width), max(1, height))
             
-        # Add a small buffer (padding) for better collision
-        buffer = 2
+        # Add a small buffer (padding) for better collision.
+        # This ensures:
+        # 1. The collision detection isn't too precise, which can cause "tunneling" issues
+        #    where fast-moving objects pass through each other between frames
+        # 2. It provides a small margin of error for physics calculations
+        # 3. It makes collisions feel better from a gameplay perspective
+        # Note: Set to 0 if you want the orange box to exactly match visible pixels
+        buffer = 0  # Changed to 0 for exact pixel-perfect bounds
         min_x = max(0, min_x - buffer)
         min_y = max(0, min_y - buffer)
         max_x = min(width, max_x + buffer)
         max_y = min(height, max_y + buffer)
         
+        # Ensure we have non-zero dimensions
+        if min_x == max_x:
+            max_x = min_x + 1
+        if min_y == max_y:
+            max_y = min_y + 1
+            
+        if DEBUG:
+            print(f"Calculated bounds: {(min_x, min_y, max_x, max_y)} for {width}x{height} surface")
         return (min_x, min_y, max_x, max_y)
     
     def update_visual_rect(self):
         """Update the visual rectangle to match current sprite"""
         # Center visual rect on collision rect
+        # This ensures that the visual rect (purple) always matches the sprite image exactly
         self.visual_rect.centerx = self.rect.centerx
         self.visual_rect.bottom = self.rect.bottom
+        
+        # Make sure visual rect has the correct dimensions for the current frame
+        self.visual_rect.width = self.frame_width
+        self.visual_rect.height = self.frame_height
     
     def update_foot_rect(self):
         """Update the foot rectangle position to match the enemy's position"""
@@ -236,20 +305,47 @@ class Enemy(pygame.sprite.Sprite):
         
     def update_collision_bounds_for_frame(self):
         """Update collision rectangle based on the current frame's non-transparent pixels"""
-        # Use the precalculated bounds for the current frame and direction
+        # Get the precalculated bounds for the current frame and direction
+        if self.direction.value not in self.frame_bounds:
+            if DEBUG:
+                print(f"WARNING: No bounds for direction {self.direction}")
+            return
+            
+        if self.current_frame >= len(self.frame_bounds[self.direction.value]):
+            if DEBUG:
+                print(f"WARNING: No bounds for frame {self.current_frame} in direction {self.direction}")
+            return
+            
         new_bounds = self.frame_bounds[self.direction.value][self.current_frame]
         
         # Store the current position
         old_centerx = self.rect.centerx
         old_bottom = self.rect.bottom
         
-        # Update collision rect with new dimensions
-        self.rect.width = new_bounds[2] - new_bounds[0] 
-        self.rect.height = new_bounds[3] - new_bounds[1]
+        # Calculate the new dimensions
+        new_width = new_bounds[2] - new_bounds[0]
+        new_height = new_bounds[3] - new_bounds[1]
         
-        # Restore position
+        # Always create a new rect with the updated dimensions
+        # This guarantees that pygame will properly update the rect
+        self.rect = pygame.Rect(0, 0, new_width, new_height)
+        
+        # Restore the position
         self.rect.centerx = old_centerx
         self.rect.bottom = old_bottom
+        
+        # CRITICAL: Store the bounds offset relative to the visual_rect for accurate debug drawing
+        # This allows us to correctly position the orange bounding box on screen
+        self.bounds_offset_x = new_bounds[0]
+        self.bounds_offset_y = new_bounds[1]
+        
+        # Store the current bounds for debugging/reference
+        self.tight_bounds = new_bounds
+        
+        # Print debugging info only when DEBUG is enabled
+        if DEBUG:
+            print(f"Frame bounds: {new_bounds} -> Size: {new_width}x{new_height}")
+            print(f"Updated collision rect to: {self.rect.width}x{self.rect.height} at ({self.rect.x}, {self.rect.y})")
     
     def update(self, dt, platforms, ground_blocks):
         """Update enemy based on its type"""
@@ -281,6 +377,9 @@ class Enemy(pygame.sprite.Sprite):
         self.update_foot_rect()
         
         # Update animation
+        old_frame = self.current_frame
+        old_direction = self.direction
+        
         self.animation_time += dt
         if self.animation_time >= self.animation_speed:
             self.current_frame = (self.current_frame + 1) % 4
@@ -289,8 +388,14 @@ class Enemy(pygame.sprite.Sprite):
             # Use the correct set of frames based on direction
             self.image = self.frames[self.direction.value][self.current_frame]
             
-            # Update collision rectangle based on the current frame's non-transparent pixels
+            # CRITICAL: Update collision rectangle based on the current frame's non-transparent pixels
+            # This ensures the orange bounding box tracks the current animation frame
             self.update_collision_bounds_for_frame()
+            
+            # Debug: Print bounds info when DEBUG is enabled
+            if DEBUG:
+                print(f"Frame changed to {self.current_frame}, dir={self.direction.name}, " +
+                     f"rect={self.rect.width}x{self.rect.height}")
     
     def check_ground_collisions(self, platforms, ground_blocks):
         """Check if enemy is on ground"""
@@ -470,6 +575,7 @@ class Enemy(pygame.sprite.Sprite):
                     self.image = self.frames[self.direction.value][self.current_frame]
                     
                     # Update collision bounds for the new direction's frame
+                    # This is critical to ensure the orange bounding box tracks correctly on direction change
                     self.update_collision_bounds_for_frame()
             
             # Set velocity based on direction

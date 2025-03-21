@@ -287,6 +287,13 @@ class Level:
                 # For player, use visual_rect for drawing the sprite
                 sprite_screen_pos = self.camera.apply_rect(sprite.visual_rect)
                 screen.blit(sprite.image, sprite_screen_pos)
+            elif isinstance(sprite, Enemy):  # Special handling for enemies
+                # CRITICAL FIX: Use visual_rect for enemies too, not collision rect!
+                # This was the source of the misalignment - we were drawing the sprite
+                # using the collision rect position, but debug bounds were calculated
+                # against the visual rect
+                sprite_screen_pos = self.camera.apply_rect(sprite.visual_rect)
+                screen.blit(sprite.image, sprite_screen_pos)
             else:
                 sprite_screen_pos = self.camera.apply_rect(sprite.rect)
                 
@@ -300,6 +307,72 @@ class Level:
         if self.debug:
             self.render_debug_info(screen)
     
+    def _calculate_player_tight_bounds(self, surface):
+        """Calculate tight bounds around non-transparent pixels in the player's surface.
+        Returns a tuple of (min_x, min_y, max_x, max_y). Uses the same algorithm as enemy.py."""
+        # Get surface dimensions
+        width, height = surface.get_size()
+        
+        if width == 0 or height == 0:
+            return (0, 0, max(1, width), max(1, height))
+        
+        # Make sure the surface has alpha channel
+        if surface.get_alpha() is None and surface.get_bitsize() < 32:
+            # Convert to a format with alpha channel
+            surface = surface.convert_alpha()
+        
+        # Initialize bounds to extreme values
+        min_x = width
+        min_y = height
+        max_x = 0
+        max_y = 0
+        
+        # Alpha threshold for considering a pixel "solid"
+        # Values below this are considered transparent
+        alpha_threshold = 25
+        
+        # Flag to check if any non-transparent pixels were found
+        found_pixels = False
+        
+        # Scan the surface for non-transparent pixels
+        for y in range(height):
+            for x in range(width):
+                try:
+                    # Get the color at this pixel
+                    color = surface.get_at((x, y))
+                    
+                    # Check if this pixel is visible (alpha > threshold)
+                    if len(color) > 3 and color[3] > alpha_threshold:  # Alpha is the 4th component
+                        # Update bounds
+                        min_x = min(min_x, x)
+                        min_y = min(min_y, y)
+                        max_x = max(max_x, x + 1)  # +1 to get correct width
+                        max_y = max(max_y, y + 1)  # +1 to get correct height
+                        found_pixels = True
+                except IndexError:
+                    # Skip problematic pixels
+                    continue
+        
+        # If no non-transparent pixels found, return default bounds
+        if not found_pixels or min_x > max_x or min_y > max_y:
+            # Ensure we don't return zero width/height bounds
+            return (0, 0, max(1, width), max(1, height))
+            
+        # Set buffer to 0 for exact pixel-perfect bounds
+        buffer = 0
+        min_x = max(0, min_x - buffer)
+        min_y = max(0, min_y - buffer)
+        max_x = min(width, max_x + buffer)
+        max_y = min(height, max_y + buffer)
+        
+        # Ensure we have non-zero dimensions
+        if min_x == max_x:
+            max_x = min_x + 1
+        if min_y == max_y:
+            max_y = min_y + 1
+            
+        return (min_x, min_y, max_x, max_y)
+        
     def render_debug_info(self, screen):
         """Render debug information"""
         # Draw grid
@@ -345,45 +418,70 @@ class Level:
         text_surface = self.debug_font.render(fps_text, True, WHITE)
         screen.blit(text_surface, (10, 160))
         
-        # Draw player rectangles in order of size (largest to smallest)
+        # Draw player rectangles (collision and feet only)
         
-        # 1. Draw visual rect (green) - the actual sprite image bounds
-        visual_screen_rect = self.camera.apply_rect(self.player.visual_rect)
-        pygame.draw.rect(screen, (0, 255, 0), visual_screen_rect, 1)  # Green for visual bounds
+        # Draw player collision rect using the same pixel-perfect bounds logic as enemy
+        # Using exact position to ensure it aligns properly with sprite
+        visual_screen_pos = self.camera.apply_rect(self.player.visual_rect)
         
-        # 2. Draw collision rect (red) - narrower than visual rect, used for collisions
-        collision_screen_rect = self.camera.apply_rect(self.player.rect)
-        pygame.draw.rect(screen, (255, 0, 0), collision_screen_rect, 2)  # Red for collision box
+        # Get current frame from the player
+        current_frame = self.player.frames[self.player.direction][int(self.player.animation_frame)]
         
-        # 3. Draw foot rect (cyan) - used for precise ground detection
+        # Calculate tight bounds (using same method as _calculate_tight_bounds in enemy.py)
+        bounds = self._calculate_player_tight_bounds(current_frame)
+        
+        # Draw orange bounds (same as enemy)
+        tight_bounds_screen_rect = pygame.Rect(
+            visual_screen_pos.x + bounds[0],
+            visual_screen_pos.y + bounds[1],
+            bounds[2] - bounds[0],  # Width
+            bounds[3] - bounds[1]   # Height
+        )
+        pygame.draw.rect(screen, (255, 165, 0), tight_bounds_screen_rect, 1)  # Orange with 1px width
+        
+        # 2. Draw foot rect (cyan) - used for precise ground detection
         foot_screen_rect = self.camera.apply_rect(self.player.foot_rect)
-        pygame.draw.rect(screen, (0, 255, 255), foot_screen_rect, 2)  # Cyan color for foot box
+        pygame.draw.rect(screen, (0, 255, 255), foot_screen_rect, 1)  # Cyan color for foot box, 1px width
         
-        # 4. Draw ground sensor area (yellow) - extends slightly below feet
-        ground_sensor = pygame.Rect(self.player.foot_rect)
-        ground_sensor.height = 12
-        ground_sensor.bottom = self.player.rect.bottom + 2
-        ground_sensor_screen_rect = self.camera.apply_rect(ground_sensor)
-        pygame.draw.rect(screen, (255, 255, 0), ground_sensor_screen_rect, 1)  # Yellow for ground sensor
+        # Remove the yellow ground sensor as requested
         
         # Draw enemy debug info
         for enemy in self.enemies:
-            # Draw visual rect (purple) for enemies - the sprite's full dimensions
-            enemy_visual_rect = self.camera.apply_rect(enemy.visual_rect)
-            pygame.draw.rect(screen, (255, 0, 255), enemy_visual_rect, 1)  # Purple for enemy visual bounds
-            
             # Draw collision rect (orange) for enemies - the actual hit box
-            enemy_collision_rect = self.camera.apply_rect(enemy.rect)
-            pygame.draw.rect(screen, (255, 165, 0), enemy_collision_rect, 2)  # Orange for enemy collision
+            
+            # CRITICAL FIX: Draw the orange bounds directly over the sprite image
+            # This is the key: the bounds are relative to the sprite image's top-left (0,0)
+            # So we need to apply them directly to where the sprite is rendered on screen
+            
+            # 1. Get screen position where the sprite is rendered
+            # We must use visual_rect here since that's what we're using to render the sprite image
+            visual_screen_pos = self.camera.apply_rect(enemy.visual_rect)
+            
+            # 2. Calculate the bounds rect in screen space
+            # The bounds offsets are already relative to the visual rect's top-left (0,0) 
+            # in the sprite frame, so we can use them directly
+            tight_bounds_screen_rect = pygame.Rect(
+                visual_screen_pos.x + enemy.bounds_offset_x,
+                visual_screen_pos.y + enemy.bounds_offset_y,
+                enemy.tight_bounds[2] - enemy.tight_bounds[0],  # Width
+                enemy.tight_bounds[3] - enemy.tight_bounds[1]   # Height
+            )
+            
+            # 4. Draw the pixel-perfect orange bounding box
+            pygame.draw.rect(screen, (255, 165, 0), tight_bounds_screen_rect, 1)  # Orange with 1px width
             
             # Draw foot rect (cyan) - used for ground detection, just like the player
             enemy_foot_rect = self.camera.apply_rect(enemy.foot_rect)
-            pygame.draw.rect(screen, (0, 255, 255), enemy_foot_rect, 2)  # Same cyan as player foot box
+            pygame.draw.rect(screen, (0, 255, 255), enemy_foot_rect, 1)  # Cyan with 1px width
             
-            # Direction is indicated by the enemy sprite itself
+            # Draw direction and frame info for debugging
+            direction_text = f"Dir: {enemy.direction.name}, Frame: {enemy.current_frame}"
+            text_surface = self.debug_font.render(direction_text, True, WHITE)
+            enemy_pos = self.camera.apply_rect(enemy.visual_rect)
+            screen.blit(text_surface, (enemy_pos.x, enemy_pos.y - 25))
         
         # Debug text explaining the rectangles
-        rect_text = "Green/Purple: Visual Bounds | Red/Orange: Collision Box | Cyan: Foot Box"
+        rect_text = "Orange: Collision Box | Cyan: Foot Box"
         text_surface = self.debug_font.render(rect_text, True, WHITE)
         screen.blit(text_surface, (10, 190))
         
