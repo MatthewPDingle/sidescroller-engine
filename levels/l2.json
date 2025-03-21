@@ -1,0 +1,88 @@
+{
+  "dimensions": {
+    "width": 96,
+    "height": 16,
+    "cell_size": 32,
+    "width_pixels": 3072,
+    "height_pixels": 512
+  },
+  "platforms": [],
+  "ground_blocks": [
+    {
+      "x": 0,
+      "y": 15,
+      "width": 96
+    }
+  ],
+  "enemies": [
+    {
+      "x": 17,
+      "y": 8,
+      "type": "armadillo_warrior"
+    },
+    {
+      "x": 23,
+      "y": 9,
+      "type": "female_scientist"
+    },
+    {
+      "x": 30,
+      "y": 8,
+      "type": "homer"
+    },
+    {
+      "x": 42,
+      "y": 7,
+      "type": "kung_fu_master"
+    },
+    {
+      "x": 49,
+      "y": 8,
+      "type": "lizard_warrior"
+    },
+    {
+      "x": 71,
+      "y": 7,
+      "type": "summer"
+    },
+    {
+      "x": 77,
+      "y": 7,
+      "type": "tech_bro"
+    },
+    {
+      "x": 84,
+      "y": 7,
+      "type": "villager"
+    },
+    {
+      "x": 91,
+      "y": 7,
+      "type": "orangutan"
+    }
+  ],
+  "assets": {
+    "background": "resources/graphics/backgrounds/background_2048_512.png",
+    "foreground": "resources/graphics/backgrounds/foreground_2048_512.png",
+    "platform_image": "resources/graphics/platform.png",
+    "enemy_types": [
+      "armadillo_warrior",
+      "female_scientist",
+      "homer",
+      "kung_fu_master",
+      "lizard_warrior",
+      "summer",
+      "tech_bro",
+      "villager",
+      "orangutan"
+    ]
+  },
+  "parallax": {
+    "fg_scroll_rate": 1.0,
+    "bg_scroll_rate": 0.2
+  },
+  "metadata": {
+    "created": 127345,
+    "editor_version": "1.0"
+  }
+}

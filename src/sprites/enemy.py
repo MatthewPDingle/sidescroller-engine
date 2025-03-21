@@ -36,10 +36,11 @@ class Direction(Enum):
             return None  # No movement
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x, y, enemy_type, cell_size):
+    def __init__(self, x, y, enemy_type, cell_size, character_type='armadillo_warrior'):
         super().__init__()
         self.cell_size = cell_size
         self.enemy_type = enemy_type
+        self.character_type = character_type
         
         # Convert from cell to pixel coordinates
         self.cell_x = x
@@ -58,18 +59,29 @@ class Enemy(pygame.sprite.Sprite):
         self.velocity_y = 0
         self.on_ground = False
         
-        # Always use armadillo_warrior_ss.png for all enemy types
-        sprite_sheet_path = os.path.join('resources', 'graphics', 'characters', 'armadillo_warrior_ss.png')
+        # Format filename: add _ss.png suffix if needed
+        if not self.character_type.endswith('_ss'):
+            sprite_filename = f"{self.character_type}_ss.png"
+        else:
+            sprite_filename = f"{self.character_type}.png"
+            
+        sprite_sheet_path = os.path.join('resources', 'graphics', 'characters', sprite_filename)
         
         try:
             sprite_sheet = pygame.image.load(sprite_sheet_path).convert_alpha()
         except pygame.error:
-            # Fallback sprite if even the armadillo sprite is missing
+            # Fallback to armadillo_warrior if the requested sprite is missing
+            fallback_path = os.path.join('resources', 'graphics', 'characters', 'armadillo_warrior_ss.png')
             if DEBUG:
-                print(f"Warning: Could not load enemy sprite from {sprite_sheet_path}")
-            # Create a simple fallback sprite with four frames for each direction
-            sprite_sheet = pygame.Surface((64*4, 64*4), pygame.SRCALPHA)
-            sprite_sheet.fill((255, 0, 0, 0))  # Transparent red
+                print(f"Warning: Could not load enemy sprite from {sprite_sheet_path}, falling back to {fallback_path}")
+            try:
+                sprite_sheet = pygame.image.load(fallback_path).convert_alpha()
+            except pygame.error:
+                # Create a simple fallback sprite if even the fallback is missing
+                if DEBUG:
+                    print(f"Warning: Could not load fallback sprite from {fallback_path}")
+                sprite_sheet = pygame.Surface((64*4, 64*4), pygame.SRCALPHA)
+                sprite_sheet.fill((255, 0, 0, 0))  # Transparent red
         
         # Calculate frame size
         sheet_width, sheet_height = sprite_sheet.get_size()

@@ -154,13 +154,38 @@ class Level:
         # Create enemies
         for enemy_data in self.level_data.get('enemies', []):
             try:
-                # Try to map enemy type string to enum
-                enemy_type_str = enemy_data.get('type', 'BASIC').upper()
-                # Handle special case mappings
-                if enemy_type_str == 'ARMADILLO':
-                    enemy_type_str = 'BASIC'
-                elif enemy_type_str == 'SCIENTIST':
-                    enemy_type_str = 'JUMPING'
+                # Map various character types to behavior enum
+                character_type = enemy_data.get('type', 'armadillo_warrior')
+                
+                # Determine behavior based on character type
+                # Default most to BASIC, but map specific ones to FLYING or JUMPING
+                enemy_behavior_map = {
+                    # Default for most characters is BASIC
+                    'armadillo_warrior': 'BASIC',
+                    'lizard_warrior': 'BASIC',
+                    'kung_fu_master': 'BASIC',
+                    'vendor': 'BASIC',
+                    'villager': 'BASIC',
+                    'homer': 'BASIC',
+                    'marge': 'BASIC',
+                    'lisa': 'BASIC',
+                    'tech_bro': 'BASIC',
+                    'yeti': 'BASIC',
+                    'orangutan': 'BASIC',
+                    'chimp': 'BASIC',
+                    
+                    # JUMPING characters
+                    'scientist': 'JUMPING',
+                    'female_scientist': 'JUMPING',
+                    'morty': 'JUMPING',
+                    'summer': 'JUMPING',
+                    
+                    # FLYING characters
+                    'camo': 'FLYING'
+                }
+                
+                # Get behavior string from map, default to BASIC if not found
+                enemy_type_str = enemy_behavior_map.get(character_type, 'BASIC').upper()
                 
                 # Try to get the actual enum
                 enemy_type = EnemyType[enemy_type_str]
@@ -169,11 +194,14 @@ class Level:
                 enemy_type = EnemyType.BASIC
                 print(f"Warning: Unknown enemy type '{enemy_data.get('type')}', defaulting to BASIC")
                 
+            # Pass the enemy type string as well to allow loading the correct sprite
+            enemy_type_str = enemy_data.get('type', 'armadillo_warrior')
             enemy = Enemy(
                 enemy_data['x'], 
                 enemy_data['y'], 
                 enemy_type, 
-                self.cell_size
+                self.cell_size,
+                enemy_type_str  # Pass the character type string
             )
             self.enemies.add(enemy)
             self.all_sprites.add(enemy)
