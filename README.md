@@ -57,8 +57,8 @@ Levels are defined in JSON files located in the `levels/` directory. See the exi
     "cell_size": 32
   },
   "assets": {
-    "background": "resources/graphics/background_2048_512.png",
-    "foreground": "resources/graphics/foreground_2048_512.png",
+    "background": "resources/graphics/backgrounds/background_2048_512.png",
+    "foreground": "resources/graphics/backgrounds/foreground_2048_512.png",
     "platform_image": "resources/graphics/platform.png"
   },
   "parallax": {
@@ -103,6 +103,9 @@ sidescroller-engine/
 ├── resources/            # Game assets
 │   ├── audio/            # Sound effects and music
 │   └── graphics/         # Images and sprite sheets
+│       ├── backgrounds/  # Background and foreground images
+│       ├── characters/   # Player and enemy sprite sheets
+│       └── platform.png  # Platform texture
 ├── src/                  # Source code
 │   ├── sprites/          # Game entities
 │   │   ├── enemy.py      # Enemy classes
@@ -143,11 +146,11 @@ These tests generate visualizations in the `tests/output/` directory to help ana
    - Row 3: South-facing animations (4 frames)
    - Row 4: West-facing animations (4 frames)
 
-2. Place the sprite sheet in `resources/graphics/`
+2. Place the sprite sheet in `resources/graphics/characters/`
 
 3. Test your sprite collision bounds:
    ```
-   python tests/run_visualization.py resources/graphics/your_sprite_sheet.png
+   python tests/run_visualization.py resources/graphics/characters/your_sprite_sheet.png
    ```
 
 4. Review the output in `tests/output/` to ensure collision bounds work as expected

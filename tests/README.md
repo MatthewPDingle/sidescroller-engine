@@ -93,13 +93,13 @@ Here's an example of the visualization output:
 
 1. **Debug collision issues**:
    ```bash
-   python tests/run_visualization.py resources/graphics/armadillo_warrior_ss.png
+   python tests/run_visualization.py resources/graphics/characters/armadillo_warrior_ss.png
    ```
    Examine the resulting visualizations to see if the bounding boxes properly track the visible parts of the sprite.
 
 2. **Test a new sprite sheet**:
    ```bash
-   python tests/run_visualization.py resources/graphics/new_enemy.png
+   python tests/run_visualization.py resources/graphics/characters/new_enemy.png
    ```
    Verify that bounds are calculated correctly for your new sprite.
 

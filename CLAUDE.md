@@ -15,9 +15,12 @@
 - **Assets**: Store in resources/ directory with subdirectories for graphics, audio
 - **Coordinate Systems**: Always specify coordinate system (world, grid, screen) in variable names
 - **JSON Structure**: Follow level5.json format for level files
+- **Constants**: Define all constants in utils/constants.py, use ALL_CAPS for names
+- **Colors**: Use color constants from utils/constants.py (RED, GREEN, etc.)
 
 ## Documentation
 - Comment complex physics/collision calculations
 - Keep Design Spec.txt updated when adding new features
 - Document coordinate transformations between world/screen space
 - Use type hints in function signatures
+- Maintain consistent debug visualization patterns for collision/sensor areas

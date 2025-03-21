@@ -36,7 +36,7 @@ class Player(pygame.sprite.Sprite):
         
         # Load sprite sheet
         try:
-            sprite_sheet = pygame.image.load(os.path.join('resources', 'graphics', 'scientist_ss.png')).convert_alpha()
+            sprite_sheet = pygame.image.load(os.path.join('resources', 'graphics', 'characters', 'scientist_ss.png')).convert_alpha()
         except pygame.error:
             # Create fallback surface
             sprite_sheet = pygame.Surface((64, 64))

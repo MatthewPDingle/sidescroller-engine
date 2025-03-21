@@ -1,0 +1,133 @@
+{
+  "dimensions": {
+    "width": 96,
+    "height": 16,
+    "cell_size": 32,
+    "width_pixels": 3072,
+    "height_pixels": 512
+  },
+  "platforms": [
+    {
+      "x": 3,
+      "y": 14,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 2,
+      "y": 12,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 1,
+      "y": 10,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 0,
+      "y": 8,
+      "width": 1,
+      "height": 1
+    },
+    {
+      "x": 24,
+      "y": 14,
+      "width": 4,
+      "height": 1
+    },
+    {
+      "x": 28,
+      "y": 13,
+      "width": 4,
+      "height": 1
+    },
+    {
+      "x": 32,
+      "y": 12,
+      "width": 9,
+      "height": 1
+    },
+    {
+      "x": 41,
+      "y": 13,
+      "width": 4,
+      "height": 1
+    },
+    {
+      "x": 45,
+      "y": 14,
+      "width": 4,
+      "height": 1
+    },
+    {
+      "x": 72,
+      "y": 8,
+      "width": 8,
+      "height": 1
+    },
+    {
+      "x": 66,
+      "y": 11,
+      "width": 3,
+      "height": 1
+    },
+    {
+      "x": 60,
+      "y": 14,
+      "width": 3,
+      "height": 1
+    },
+    {
+      "x": 83,
+      "y": 11,
+      "width": 3,
+      "height": 1
+    },
+    {
+      "x": 89,
+      "y": 14,
+      "width": 3,
+      "height": 1
+    }
+  ],
+  "ground_blocks": [
+    {
+      "x": 0,
+      "y": 15,
+      "width": 96
+    }
+  ],
+  "enemies": [
+    {
+      "x": 33,
+      "y": 6,
+      "type": "armadillo"
+    },
+    {
+      "x": 55,
+      "y": 8,
+      "type": "armadillo"
+    },
+    {
+      "x": 75,
+      "y": 3,
+      "type": "armadillo"
+    }
+  ],
+  "assets": {
+    "background": "resources/graphics/backgrounds/background_2048_512.png",
+    "foreground": "resources/graphics/backgrounds/foreground_2048_512.png",
+    "platform_image": "resources/graphics/platform.png",
+    "enemy_types": []
+  },
+  "parallax": {
+    "fg_scroll_rate": 1.0,
+    "bg_scroll_rate": 0.2
+  },
+  "metadata": {
+    "created": 102894,
+    "editor_version": "1.0"
+  }
+}

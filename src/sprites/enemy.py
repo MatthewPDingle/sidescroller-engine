@@ -59,7 +59,7 @@ class Enemy(pygame.sprite.Sprite):
         self.on_ground = False
         
         # Always use armadillo_warrior_ss.png for all enemy types
-        sprite_sheet_path = os.path.join('resources', 'graphics', 'armadillo_warrior_ss.png')
+        sprite_sheet_path = os.path.join('resources', 'graphics', 'characters', 'armadillo_warrior_ss.png')
         
         try:
             sprite_sheet = pygame.image.load(sprite_sheet_path).convert_alpha()

@@ -60,7 +60,7 @@ class Level:
             if os.path.isabs(bg_path):
                 # Extract filename from absolute path
                 bg_filename = os.path.basename(bg_path)
-                bg_path = os.path.join('resources', 'graphics', bg_filename)
+                bg_path = os.path.join('resources', 'graphics', 'backgrounds', bg_filename)
             
             print(f"Loading background from: {bg_path}")
             self.bg_image = pygame.image.load(bg_path).convert_alpha()
@@ -87,7 +87,7 @@ class Level:
             if os.path.isabs(fg_path):
                 # Extract filename from absolute path
                 fg_filename = os.path.basename(fg_path)
-                fg_path = os.path.join('resources', 'graphics', fg_filename)
+                fg_path = os.path.join('resources', 'graphics', 'backgrounds', fg_filename)
             
             print(f"Loading foreground from: {fg_path}")
             self.fg_image = pygame.image.load(fg_path).convert_alpha()

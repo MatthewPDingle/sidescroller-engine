@@ -1,3 +1,5 @@
 "__pycache__/" 
-"*.Identifier" 
 "*.pyc"
+"*.Zone.Identifier" 
+"*.Identifier"
+"promptify.py"

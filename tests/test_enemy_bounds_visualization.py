@@ -54,7 +54,7 @@ class TestEnemyBoundsVisualization(unittest.TestCase):
             sprite_sheet_path = self.sprite_sheet_path
         else:
             # Use default sprite sheet path
-            sprite_sheet_path = os.path.join(project_root, 'resources', 'graphics', 'armadillo_warrior_ss.png')
+            sprite_sheet_path = os.path.join(project_root, 'resources', 'graphics', 'characters', 'armadillo_warrior_ss.png')
         
         try:
             sprite_sheet = pygame.image.load(sprite_sheet_path).convert_alpha()

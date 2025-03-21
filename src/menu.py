@@ -15,7 +15,7 @@ class MainMenu:
         
         # Background image
         try:
-            self.bg_image = pygame.image.load(os.path.join('resources', 'graphics', 'menu_bg.png'))
+            self.bg_image = pygame.image.load(os.path.join('resources', 'graphics', 'backgrounds', 'menu_bg.png'))
             self.bg_image = pygame.transform.scale(self.bg_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
         except:
             self.bg_image = None
